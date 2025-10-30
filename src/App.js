@@ -7,6 +7,9 @@ import logo from "./logo.svg";
 import AdminLogin from "./Admin/Login";
 import ForgetPassword from "./Admin/ForgetPassword"; // ← match file name
 
+/* ✅ Added import for Admin Dashboard */
+import AdminDashboard from "./Admin/Dashboard";
+
 function App() {
   return (
     <BrowserRouter>
@@ -14,6 +17,9 @@ function App() {
         <Routes>
           <Route path="/" element={<AdminLogin />} />
           <Route path="/forgot-password" element={<ForgetPassword />} />
+
+          {/* ✅ Added route for Admin Dashboard */}
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
 
         <header className="App-header">

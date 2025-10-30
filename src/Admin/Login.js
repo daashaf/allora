@@ -1,13 +1,22 @@
 import React, { useState } from "react";
 import "./login.css";
 
+/* ✅ Added import for navigation */
+import { useNavigate } from "react-router-dom";
+
 export default function AdminLogin() {
   const [show, setShow] = useState(false);
+
+  /* ✅ Added useNavigate hook */
+  const navigate = useNavigate();
 
   function onSubmit(e) {
     e.preventDefault();
     // TODO: wire up to your authentication later
     alert("Login clicked");
+
+    /* ✅ Added redirect to admin dashboard */
+    navigate("/admin/dashboard");
   }
 
   return (
