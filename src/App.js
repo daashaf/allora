@@ -9,6 +9,8 @@ import ForgetPassword from "./Admin/ForgetPassword"; // ← match file name
 
 /* ✅ Added import for Admin Dashboard */
 import AdminDashboard from "./Admin/Dashboard";
+import ManageUsers from "./Admin/ManageUsers";
+import ManagerApprovals from "./Admin/ManagerApprovals";
 
 function App() {
   return (
@@ -20,6 +22,8 @@ function App() {
 
           {/* ✅ Added route for Admin Dashboard */}
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/users" element={<ManageUsers />} />
+          <Route path="/admin/manager-approvals" element={<ManagerApprovals />} />
         </Routes>
 
         <header className="App-header">
