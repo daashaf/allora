@@ -1,11 +1,29 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../login.css";
+import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
 
+const ROLE_OPTIONS = [
+  "Customer",
+  "Administrator",
+  "Customer Support",
+  "Service Provider",
+];
+
+const formatRoleHeading = (role) => {
+  if (!role) {
+    return "";
+  }
+
+  const article = /^[aeiou]/i.test(role) ? "AN" : "A";
+  return `LOGIN AS ${article} ${role.toUpperCase()}`;
+};
+
 export default function Login() {
+  const [isLoading, setIsLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [resetStep, setResetStep] = useState(1);
@@ -28,7 +46,36 @@ export default function Login() {
   const [signupMessage, setSignupMessage] = useState("");
   const [signupError, setSignupError] = useState("");
   const [signupLoading, setSignupLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState(ROLE_OPTIONS[0]);
   const navigate = useNavigate();
+  const roleHeading = formatRoleHeading(selectedRole);
+
+  useEffect(() => {
+    const finishLoading = () => setIsLoading(false);
+    if (document.readyState === "complete") {
+      finishLoading();
+    } else {
+      window.addEventListener("load", finishLoading);
+    }
+    const timeoutId = window.setTimeout(finishLoading, 1200);
+
+    return () => {
+      window.removeEventListener("load", finishLoading);
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) {
+      document.body.classList.add("body-lock");
+    } else {
+      document.body.classList.remove("body-lock");
+    }
+
+    return () => {
+      document.body.classList.remove("body-lock");
+    };
+  }, [isLoading]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -259,17 +306,26 @@ export default function Login() {
     "Queenstown",
   ];
 
+  const cardClassName = isSignup ? "card card--signup" : "card";
+
   return (
     <div className="admin-login-page">
+      {isLoading && (
+        <div className="page-loader" role="status" aria-live="polite">
+          <InfinityLogo className="infinity-logo loader-logo" focusable="false" />
+          <p className="loader-text">Loading Allora</p>
+        </div>
+      )}
+
       <div className="floating-circle circle-top" aria-hidden="true" />
       <div className="floating-circle circle-bottom" aria-hidden="true" />
 
       <header className="brand-wrap">
         <h1 className="brand">ALLORA SERVICE HUB</h1>
-        <p className="role">AS A CUSTOMER</p>
+        <p className="role">{roleHeading}</p>
       </header>
 
-      <section className="card">
+      <section className={cardClassName}>
         {isSignup ? (
           <>
             <h2 className="card-title">Create Account</h2>
@@ -393,12 +449,34 @@ export default function Login() {
                 Log in
               </button>
             </p>
+
+            <div className="card-logo" aria-hidden="true">
+              <InfinityLogo className="infinity-logo" focusable="false" />
+            </div>
           </>
         ) : (
           <>
             <h2 className="card-title">Login</h2>
 
             <form onSubmit={handleSubmit} className="login-form">
+              <div className="field">
+                <label className="label" htmlFor="login-role">
+                  Login as
+                </label>
+                <select
+                  id="login-role"
+                  className="input"
+                  value={selectedRole}
+                  onChange={(event) => setSelectedRole(event.target.value)}
+                >
+                  {ROLE_OPTIONS.map((roleOption) => (
+                    <option key={roleOption} value={roleOption}>
+                      {roleOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="field">
                 <label className="label" htmlFor="login-email">
                   Email Address
@@ -457,6 +535,10 @@ export default function Login() {
                 </button>
               </p>
             </form>
+
+            <div className="card-logo" aria-hidden="true">
+              <InfinityLogo className="infinity-logo" focusable="false" />
+            </div>
           </>
         )}
       </section>

@@ -13,6 +13,10 @@ body {
   color: #0f2857;
 }
 
+body.body-lock {
+  overflow: hidden;
+}
+
 .admin-login-page {
   min-height: 100vh;
   width: 100%;
@@ -28,8 +32,8 @@ body {
 
 .floating-circle {
   position: absolute;
-  width: 680px;
-  height: 680px;
+  width: 900px;
+  height: 900px;
   border-radius: 50%;
   background: radial-gradient(circle at 28% 30%, #d6ecff 0%, #afd9ff 45%, #7fc0ff 85%);
   opacity: 0.85;
@@ -38,14 +42,14 @@ body {
 }
 
 .circle-top {
-  top: -420px;
-  right: -360px;
+  top: -560px;
+  right: -480px;
   animation: floatTop 18s ease-in-out infinite alternate;
 }
 
 .circle-bottom {
-  bottom: -420px;
-  left: -360px;
+  bottom: -560px;
+  left: -480px;
   animation: floatBottom 22s ease-in-out infinite alternate;
 }
 
@@ -101,8 +105,8 @@ body {
 }
 
 .card {
-  width: 360px;
-  padding: 40px 34px;
+  width: 460px;
+  padding: 48px 46px;
   background: rgba(209, 234, 255, 0.88);
   border-radius: 22px;
   border: 1px solid rgba(148, 198, 255, 0.55);
@@ -111,6 +115,11 @@ body {
   z-index: 1;
   font-family: "Montserrat", "Poppins", sans-serif;
   color: #0c244a;
+}
+
+.card--signup {
+  width: 540px;
+  padding: 52px 56px;
 }
 
 .card-title {
@@ -273,6 +282,113 @@ select.input {
   color: rgba(17, 24, 39, 0.72);
 }
 
+.card-logo {
+  margin: 28px auto 0;
+  width: min(100%, 320px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.infinity-logo {
+  width: min(100%, 260px);
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 16px 32px rgba(48, 24, 120, 0.26));
+  pointer-events: none;
+}
+
+.infinity-logo .loop-path {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawInfinity 7s ease-in-out infinite;
+}
+
+.infinity-logo .loop-glow {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawInfinityGlow 7s ease-in-out infinite;
+}
+
+.page-loader {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: radial-gradient(circle at top, rgba(220, 235, 255, 0.94), rgba(226, 240, 255, 0.98));
+  backdrop-filter: blur(14px);
+  z-index: 30;
+}
+
+.loader-logo {
+  width: min(320px, 42vw);
+  filter: drop-shadow(0 28px 70px rgba(34, 58, 180, 0.38));
+}
+
+.loader-text {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(16, 40, 90, 0.78);
+}
+
+@keyframes drawInfinity {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  44% {
+    stroke-dashoffset: 0;
+  }
+  74% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 1000;
+    opacity: 0;
+  }
+}
+
+@keyframes drawInfinityGlow {
+  0% {
+    stroke-dashoffset: 1000;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.16;
+  }
+  50% {
+    stroke-dashoffset: 0;
+    opacity: 0.2;
+  }
+  72% {
+    stroke-dashoffset: 0;
+    opacity: 0.18;
+  }
+  100% {
+    stroke-dashoffset: 1000;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .infinity-logo .loop-path,
+  .infinity-logo .loop-glow {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
 .inline-link {
   border: none;
   background: none;
@@ -301,6 +417,41 @@ select.input {
   color: #0a6cd5;
 }
 
+@media (max-width: 768px) {
+  .floating-circle {
+    width: 600px;
+    height: 600px;
+  }
+
+  .circle-top {
+    top: -420px;
+    right: -360px;
+  }
+
+  .circle-bottom {
+    bottom: -420px;
+    left: -360px;
+  }
+
+  .card {
+    width: min(100%, 420px);
+    padding: 40px 32px;
+  }
+
+  .card--signup {
+    width: min(100%, 440px);
+    padding: 44px 34px;
+  }
+
+  .card-logo {
+    margin-top: 24px;
+  }
+
+  .infinity-logo {
+    width: min(95%, 220px);
+  }
+}
+
 @media (max-width: 600px) {
   .admin-login-page {
     padding: 60px 16px;
@@ -320,9 +471,32 @@ select.input {
     padding: 32px 26px;
   }
 
+  .card--signup {
+    width: min(100%, 360px);
+    padding: 36px 28px;
+  }
+
   .floating-circle {
-    width: 440px;
-    height: 440px;
+    width: 520px;
+    height: 520px;
+  }
+
+  .circle-top {
+    top: -340px;
+    right: -300px;
+  }
+
+  .circle-bottom {
+    bottom: -340px;
+    left: -300px;
+  }
+
+  .card-logo {
+    margin-top: 22px;
+  }
+
+  .infinity-logo {
+    width: min(95%, 200px);
   }
 
   .signup-row {
