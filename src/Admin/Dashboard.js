@@ -13,7 +13,7 @@ import {
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("Dashboard");
   const [userMgmtTab, setUserMgmtTab] = useState("Customer");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
 
