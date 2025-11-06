@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./dashboard.css";
 import {
@@ -13,7 +13,20 @@ import {
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("Dashboard");
   const [userMgmtTab, setUserMgmtTab] = useState("Customer");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+
+  const menuRef = useRef(null);
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuOpen && menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
 
   const responsibilities = {
     "User Management": [
@@ -240,7 +253,7 @@ export default function AdminDashboard() {
   return (
     <div className="dashboard-page">
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${sidebarOpen ? "" : "collapsed"}`}>
         <h2 className="logo">
           Allora
           <br />
@@ -258,26 +271,54 @@ export default function AdminDashboard() {
             </button>
           ))}
 
-          <button
-            className="logout-btn"
-            onClick={() => {
-              if (window.confirm("Are you sure you want to log out?")) {
-                window.location.href = "/";
-              }
-            }}
-          >
-            Logout
-          </button>
+          {/* Sidebar logout moved to the top navbar */}
         </nav>
       </aside>
 
       {/* Main Content */}
       <main className="main-content">
+        {/* Top Navbar */}
         <header className="topbar">
-          <div className="profile">
-            <h3 className="admin-name">Kiran - Administrator</h3>
+          <h3 className="navbar-title">Admin Dashboard</h3>
+          <div className="topbar-actions">
+            <div className="menu-wrapper" ref={menuRef}>
+              <button
+                className="icon-btn menu-toggle"
+                aria-label="Open menu"
+                title="Open menu"
+                onClick={() => setMenuOpen((v) => !v)}
+              >
+                <span className="hamburger" />
+              </button>
+              {menuOpen && (
+                <div className="top-menu">
+                  <div className="menu-title">Menu</div>
+                  {Object.keys(responsibilities).map((key) => (
+                    <button
+                      key={key}
+                      className={`menu-item ${activeSection === key ? "active" : ""}`}
+                      onClick={() => {
+                        setActiveSection(key);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              className="logout-top"
+              onClick={() => {
+                if (window.confirm("You will remain on the dashboard. Continue?")) {
+                  window.location.href = "/admin/dashboard";
+                }
+              }}
+            >
+              Logout
+            </button>
           </div>
-          <input type="text" className="search" placeholder="Search here..." />
         </header>
 
         {/* Dashboard view */}
@@ -293,8 +334,8 @@ export default function AdminDashboard() {
                   <XAxis dataKey="name" />
                   <YAxis />
                   <Tooltip />
-                  <Line type="monotone" dataKey="BestImpression" stroke="#9b59b6" strokeWidth={2} />
-                  <Line type="monotone" dataKey="Stability" stroke="#f39c12" strokeWidth={2} />
+                  <Line type="monotone" dataKey="BestImpression" stroke="#0d6efd" strokeWidth={2} />
+                  <Line type="monotone" dataKey="Stability" stroke="#06b6d4" strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
