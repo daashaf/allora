@@ -1,0 +1,14 @@
+# Default reviewers for any change
+*                           @allora/engineering-leads
+
+# Front-end customer experience
+src/components/             @allora/frontend-reviewers
+src/dashboard.css           @allora/frontend-reviewers
+src/getStarted.css          @allora/frontend-reviewers
+
+# Back-end / API configuration
+server/                     @allora/backend-team
+
+# Infrastructure / secrets templates
+.env*                       @allora/platform-team
+server/.env*                @allora/platform-team
