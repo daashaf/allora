@@ -888,13 +888,19 @@ export default function AdminDashboard() {
                   <>
                     <button
                       className="action-btn primary"
-                      onClick={() => alert("Open Service Manager")}
+                      onClick={() => {
+                        setActiveSection("Service Management");
+                        setServiceView("Manage Services");
+                      }}
                     >
                       Manage Services
                     </button>
                     <button
                       className="action-btn"
-                      onClick={() => alert("Open Listing Approvals")}
+                      onClick={() => {
+                        setActiveSection("Service Management");
+                        setServiceView("Review Listings");
+                      }}
                     >
                       Review Listings
                     </button>
