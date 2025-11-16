@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
 
 *,
 *::before,
@@ -8,7 +8,7 @@
 
 body {
   margin: 0;
-  font-family: "Poppins", sans-serif;
+  font-family: "IBM Plex Sans", "Space Grotesk", sans-serif;
   background: #ffffff;
   color: #0f2857;
 }
@@ -113,7 +113,7 @@ body.body-lock {
   box-shadow: 0 32px 80px rgba(15, 64, 122, 0.18);
   backdrop-filter: blur(4px);
   z-index: 1;
-  font-family: "Montserrat", "Poppins", sans-serif;
+  font-family: "IBM Plex Sans", "Space Grotesk", sans-serif;
   color: #0c244a;
 }
 
@@ -524,7 +524,7 @@ select.input {
   box-shadow: 0 26px 70px rgba(8, 46, 102, 0.22);
   padding: 28px 30px 32px;
   position: relative;
-  font-family: "Montserrat", "Poppins", sans-serif;
+  font-family: "IBM Plex Sans", "Space Grotesk", sans-serif;
 }
 
 .reset-header {
