@@ -39,6 +39,16 @@ Instead, it will copy all the configuration files and the transitive dependencie
 
 You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
 
+## Firebase setup & sharing with teammates
+
+1. Create a Firebase project (or reuse the existing `allora-serice-hub` project) and enable **Authentication** and **Cloud Firestore** in the Firebase console.
+2. In the Firebase console, go to **Project settings → General → Your apps**, copy the web app config, and place the values inside a local `.env` file using the keys shown in `.env.example`. Never commit your real secrets.
+3. Start the dev server with `npm start`; `src/firebase.js` automatically consumes the `REACT_APP_FIREBASE_*` variables and exposes the initialized `auth` and `db` instances for the rest of the app.
+4. To let teammates see the same “tables” (Firestore collections), add them as project members in **Project settings → Users and permissions** with at least the `Viewer` role or a custom role that grants Firestore read/write.
+5. Ask teammates to copy `.env.example` to their own `.env`, fill in the shared config, run `npm install` (first time only), and then `npm start`. They will point at the same Firebase backend, so any Firestore collections/documents you create become immediately visible to everyone with access.
+
+If you need to inspect collection data together, open **Firestore Database → Data** in the Firebase console—changes appear in real time for all collaborators.
+
 ## Learn More
 
 You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).

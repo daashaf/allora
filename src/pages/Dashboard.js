@@ -1,156 +1,263 @@
-import React from "react";
-import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import NavigationBar from "../components/NavigationBar";
 import "../dashboard.css";
 
-const recentServices = [
+const demoServices = [
   {
     title: "House Cleaning",
     description: "Trusted cleaners rated by local customers.",
     image:
       "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80",
-    online: true,
-    added: "5 mins ago",
+    category: "Home Services",
   },
   {
     title: "Web Design Sprint",
     description: "Launch-ready web experiences crafted in a week.",
     image:
       "https://images.unsplash.com/photo-1509395176047-4a66953fd231?auto=format&fit=crop&w=800&q=80",
-    online: true,
-    added: "12 mins ago",
+    category: "Digital Services",
   },
   {
     title: "Personal Trainers",
     description: "Find specialists to keep your goals on track.",
     image:
       "https://images.unsplash.com/photo-1554284126-aa88f22d8b74?auto=format&fit=crop&w=800&q=80",
-    online: true,
-    added: "18 mins ago",
+    category: "Health & Wellness",
   },
   {
     title: "Garden Care",
     description: "Skilled gardeners for tidy, healthy outdoor spaces.",
     image:
       "https://images.unsplash.com/photo-1472145246862-b24cf25c4a36?auto=format&fit=crop&w=800&q=80",
-    online: false,
-    added: "24 mins ago",
+    category: "Outdoor Services",
   },
   {
     title: "Event Photography",
     description: "Capture celebrations with cinematic storytelling.",
     image:
       "https://images.unsplash.com/photo-1518895949257-7621c3c786d4?auto=format&fit=crop&w=800&q=80",
-    online: false,
-    added: "32 mins ago",
+    category: "Events & Entertainment",
   },
   {
     title: "Mobile Car Grooming",
     description: "Detailing pros that come direct to your driveway.",
     image:
       "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80",
-    online: true,
-    added: "41 mins ago",
+    category: "Automotive",
+  },
+];
+
+const popularSearches = ["House Cleaning", "Web Design", "Personal Trainers"];
+
+const SERVICE_TYPES = [
+  "Plumbers",
+  "Renovations",
+  "Electricians",
+  "Builders",
+  "Website",
+  "Mobile App",
+  "Painters",
+  "Pest Control",
+  "Concreting",
+  "Glazing",
+  "Appliance Repair",
+  "Dog Walker",
+];
+
+const trustBrands = ["PayPrime", "HubSpot", "Freshdesk", "Zoho", "Chargebee"];
+
+const featureCards = [
+  {
+    title: "City curators",
+    copy: "Local Allora hosts meet every professional and capture their latest work.",
+  },
+  {
+    title: "Calm tracking",
+    copy: "Status cards, nudges, and receipts live in one shared timeline that feels human.",
+  },
+  {
+    title: "Support that stays",
+    copy: "Concierge teams monitor each booking and jump in before issues become escalations.",
+  },
+];
+
+const journeySteps = [
+  {
+    title: "Tell us the task",
+    copy: "Share a few details or upload a quick photo. We keep intake light but useful.",
+  },
+  {
+    title: "Review curated matches",
+    copy: "Within an hour you’ll receive tailored pros with transparent pricing and availability.",
+  },
+  {
+    title: "Book and relax",
+    copy: "Track milestones, message securely, and rely on Allora support if anything drifts.",
   },
 ];
 
 export default function Dashboard() {
+  const [activeSection, setActiveSection] = useState("discover");
+  const [selectedService, setSelectedService] = useState(SERVICE_TYPES[0]);
+  const [city, setCity] = useState("");
+  const navigate = useNavigate();
+
+  const handleSectionChange = (section) => {
+    setActiveSection(section);
+    const target = document.getElementById(section);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const handleServiceTypeSelect = (serviceType) => {
+    navigate("/services", { state: { prefill: serviceType } });
+  };
+
+  const handleHeroSubmit = (event) => {
+    event.preventDefault();
+    handleServiceTypeSelect(selectedService);
+  };
+
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page clean-dashboard">
       <div className="dashboard-circle circle-top" aria-hidden="true" />
       <div className="dashboard-circle circle-bottom" aria-hidden="true" />
 
-      <header className="dashboard-nav">
-        <div className="nav-brand">
-          <div className="nav-logo" aria-hidden="true">
-            <InfinityLogo />
-          </div>
-          <div className="nav-brand-title">
-            <span>ALLORA</span>
-            <span>Service Hub</span>
-          </div>
-        </div>
+      <NavigationBar activeSection={activeSection} onSectionSelect={handleSectionChange} />
 
-        <nav className="nav-links" aria-label="Primary">
-          <a href="#services" className="active">
-            Discover
-          </a>
-          <a href="#categories">Categories</a>
-          <a href="#insights">Insights</a>
-        </nav>
-
-        <div className="nav-actions">
-          <button className="nav-login" type="button">
-            Login
-          </button>
-          <button className="nav-cta" type="button">
-            Join as Professional
-          </button>
-        </div>
-      </header>
-
-      <main>
-        <section className="hero-section" id="services">
-          <div className="hero-copy">
-            <h1 className="hero-title">
-              Find the right professionals anywhere in New Zealand
-            </h1>
-            <form className="hero-search-card" aria-label="Service search">
-              <div className="hero-search-field">
-                <label htmlFor="service-search">Service</label>
-                <input
-                  id="service-search"
-                  type="text"
-                  placeholder="What service are you looking for?"
-                  aria-label="Service search"
-                />
+      <main className="clean-main">
+        <section className="clean-hero" id="discover">
+          <div className="clean-hero-left">
+            <p className="clean-label">Curated & local</p>
+            <h1>Find trusted professionals without scrolling through noise.</h1>
+            <p>
+              Allora pairs neighbourhood expertise with modern tooling so you can browse, book, and track services from
+              one calm dashboard.
+            </p>
+            <div className="clean-popular">
+              <span>Popular now</span>
+              <div className="clean-popular-tags">
+                {popularSearches.map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
               </div>
-              <span className="hero-search-divider" aria-hidden="true" />
-              <div className="hero-search-field">
-                <label htmlFor="service-location">Location</label>
-                <input
-                  id="service-location"
-                  type="text"
-                  placeholder="Enter suburb or postcode"
-                  aria-label="Location search"
-                />
-              </div>
-              <button className="hero-search-submit" type="submit">
-                Search
-              </button>
-            </form>
+            </div>
+          </div>
+          <form className="clean-hero-form" onSubmit={handleHeroSubmit}>
+            <div className="clean-form-field">
+              <label htmlFor="hero-service">Service</label>
+              <select
+                id="hero-service"
+                value={selectedService}
+                onChange={(event) => setSelectedService(event.target.value)}
+              >
+                {SERVICE_TYPES.map((service) => (
+                  <option key={service} value={service}>
+                    {service}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="clean-form-field">
+              <label htmlFor="hero-city">City</label>
+              <input
+                id="hero-city"
+                type="text"
+                placeholder="e.g., Bengaluru"
+                value={city}
+                onChange={(event) => setCity(event.target.value)}
+              />
+            </div>
+            <div className="clean-form-field">
+              <label htmlFor="hero-notes">Notes (optional)</label>
+              <textarea id="hero-notes" placeholder="Share timing, style, or budget cues." rows={3} />
+            </div>
+            <button type="submit">See curated providers</button>
+          </form>
+        </section>
 
+        <section className="clean-trust">
+          <p>Trusted by operations teams at</p>
+          <div className="clean-trust-logos">
+            {trustBrands.map((brand) => (
+              <span key={brand}>{brand}</span>
+            ))}
           </div>
         </section>
 
-        <section className="showcase-grid" id="categories" aria-labelledby="showcase-title">
-          <div className="showcase-header">
-            <div>
-              <p className="showcase-eyebrow">Fresh on Allora</p>
-              <h2 className="showcase-title" id="showcase-title">
-                Newly added services trending right now
-              </h2>
-            </div>
-            <button className="nav-cta" type="button">
-              View all categories
-            </button>
+        <section className="clean-highlights">
+          <div className="clean-section-heading">
+            <h2>The Allora promise</h2>
+            <p>We keep the experience warm, transparent, and reliably on time.</p>
           </div>
+          <div className="clean-highlights-grid">
+            {featureCards.map((card) => (
+              <article key={card.title}>
+                <h3>{card.title}</h3>
+                <p>{card.copy}</p>
+              </article>
+            ))}
+          </div>
+        </section>
 
-          <div className="showcase-track" role="list">
-            {recentServices.map((service) => (
-              <article className="showcase-card" key={service.title} role="listitem">
+        <section className="clean-services" aria-label="Featured services">
+          <div className="clean-section-heading">
+            <h2>Fresh from the concierge desk</h2>
+            <p>Scene-setting packages curated with photos, pricing, and availability.</p>
+          </div>
+          <div className="clean-services-grid">
+            {demoServices.map((service) => (
+              <article key={service.title} className="clean-service-card">
                 <img src={service.image} alt={service.title} loading="lazy" />
-                {service.online && <span className="tag-online">Available online</span>}
-                <span className="tag-time">{service.added}</span>
-                <div className="showcase-info">
+                <div className="clean-service-body">
+                  <span>{service.category}</span>
                   <h3>{service.title}</h3>
                   <p>{service.description}</p>
+                  <button type="button" onClick={() => handleServiceTypeSelect(service.title)}>
+                    Book now
+                  </button>
                 </div>
               </article>
             ))}
           </div>
+        </section>
 
-          <div className="showcase-indicator" aria-hidden="true">
-            Live feed updates every hour
+        <section className="clean-steps">
+          <div className="clean-section-heading">
+            <h2>How it works</h2>
+            <p>Three friendly steps from idea to completed service.</p>
+          </div>
+          <div className="clean-steps-grid">
+            {journeySteps.map((step, index) => (
+              <article key={step.title}>
+                <span>{`0${index + 1}`}</span>
+                <h3>{step.title}</h3>
+                <p>{step.copy}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="clean-cta" aria-label="Get started">
+          <div className="clean-cta-card">
+            <div>
+              <p className="clean-label">Ready in minutes</p>
+              <h2>Create your request and let Allora handle the follow-up.</h2>
+              <p>
+                From quotes to check-ins, everything lives inside one workspace. Customers stay informed and providers
+                stay focused on the craft.
+              </p>
+            </div>
+            <div className="clean-actions">
+              <button type="button" onClick={() => navigate("/get-started")}>
+                Start a request
+              </button>
+              <button type="button" className="ghost" onClick={() => navigate("/insights#contact")}>
+                Talk to support
+              </button>
+            </div>
           </div>
         </section>
       </main>

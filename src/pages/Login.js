@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "../login.css";
 import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
 
@@ -48,6 +48,8 @@ export default function Login() {
   const [signupLoading, setSignupLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState(ROLE_OPTIONS[0]);
   const navigate = useNavigate();
+  const location = useLocation();
+  const incomingRole = location.state?.role;
   const roleHeading = formatRoleHeading(selectedRole);
 
   useEffect(() => {
@@ -76,6 +78,12 @@ export default function Login() {
       document.body.classList.remove("body-lock");
     };
   }, [isLoading]);
+
+  useEffect(() => {
+    if (incomingRole && ROLE_OPTIONS.includes(incomingRole)) {
+      setSelectedRole(incomingRole);
+    }
+  }, [incomingRole]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -459,24 +467,6 @@ export default function Login() {
             <h2 className="card-title">Login</h2>
 
             <form onSubmit={handleSubmit} className="login-form">
-              <div className="field">
-                <label className="label" htmlFor="login-role">
-                  Login as
-                </label>
-                <select
-                  id="login-role"
-                  className="input"
-                  value={selectedRole}
-                  onChange={(event) => setSelectedRole(event.target.value)}
-                >
-                  {ROLE_OPTIONS.map((roleOption) => (
-                    <option key={roleOption} value={roleOption}>
-                      {roleOption}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="field">
                 <label className="label" htmlFor="login-email">
                   Email Address
