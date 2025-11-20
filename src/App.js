@@ -8,6 +8,8 @@ import Services from "./pages/Services";
 import GetStarted from "./pages/GetStarted";
 import "./App.css";
 
+// Define application routes
+
 export default function App() {
   return (
     <BrowserRouter>
