@@ -18,8 +18,8 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
     setIsNavCollapsed(true);
     if (typeof onSectionSelect === "function") {
       onSectionSelect("discover");
-    } else if (location.pathname !== "/") {
-      navigate("/", { replace: false });
+    } else if (location.pathname !== "/dashboard") {
+      navigate("/dashboard", { replace: false });
     }
   };
 
@@ -89,9 +89,12 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
           <div className="nav-logo" aria-hidden="true">
             <InfinityLogo />
           </div>
-          <div className="nav-brand-title">
-            <span>ALLORA</span>
-            <span>SERVICE HUB</span>
+          <div className="nav-brand-copy">
+            <div className="nav-brand-title">
+              <span>ALLORA</span>
+              <span>SERVICE HUB</span>
+            </div>
+            <p className="nav-tagline">Infinite services, human-guided.</p>
           </div>
         </div>
 

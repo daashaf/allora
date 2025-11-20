@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import "../login.css";
 import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
+import { auth, isFirebaseConfigured } from "../firebase";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
@@ -13,6 +15,9 @@ const ROLE_OPTIONS = [
   "Service Provider",
 ];
 
+const AUTH_DISABLED_MESSAGE =
+  "Authentication isn't configured yet. Please add your Firebase credentials to the .env file.";
+
 const formatRoleHeading = (role) => {
   if (!role) {
     return "";
@@ -20,6 +25,31 @@ const formatRoleHeading = (role) => {
 
   const article = /^[aeiou]/i.test(role) ? "AN" : "A";
   return `LOGIN AS ${article} ${role.toUpperCase()}`;
+};
+
+const getAuthErrorMessage = (error) => {
+  if (!error) {
+    return "Something went wrong. Please try again.";
+  }
+
+  switch (error.code) {
+    case "auth/user-not-found":
+      return "We couldn't find an account with that email address.";
+    case "auth/wrong-password":
+      return "The password you entered is incorrect.";
+    case "auth/invalid-credential":
+      return "That email and password do not match.";
+    case "auth/email-already-in-use":
+      return "An account already exists with that email.";
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/weak-password":
+      return "Password must be at least 6 characters long.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Please wait a moment and try again.";
+    default:
+      return error.message || "Something went wrong. Please try again.";
+  }
 };
 
 export default function Login() {
@@ -46,6 +76,10 @@ export default function Login() {
   const [signupMessage, setSignupMessage] = useState("");
   const [signupError, setSignupError] = useState("");
   const [signupLoading, setSignupLoading] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState(ROLE_OPTIONS[0]);
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,9 +119,33 @@ export default function Login() {
     }
   }, [incomingRole]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    navigate("/dashboard");
+    setLoginError("");
+
+    const trimmedEmail = loginEmail.trim().toLowerCase();
+
+    if (!trimmedEmail || !loginPassword) {
+      setLoginError("Please enter both email and password.");
+      return;
+    }
+
+    if (!isFirebaseConfigured || !auth) {
+      setLoginError(AUTH_DISABLED_MESSAGE);
+      return;
+    }
+
+    try {
+      setLoginLoading(true);
+      await signInWithEmailAndPassword(auth, trimmedEmail, loginPassword);
+      setLoginEmail(trimmedEmail);
+      setLoginPassword("");
+      navigate("/dashboard");
+    } catch (error) {
+      setLoginError(getAuthErrorMessage(error));
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   const resetSignupState = () => {
@@ -270,28 +328,34 @@ export default function Login() {
       return;
     }
 
+    if (!isFirebaseConfigured || !auth) {
+      setSignupError(AUTH_DISABLED_MESSAGE);
+      return;
+    }
+
     try {
       setSignupLoading(true);
+      const email = signupData.email.trim().toLowerCase();
+      const credential = await createUserWithEmailAndPassword(auth, email, signupData.password);
+      const displayName = `${signupData.firstName.trim()} ${signupData.lastName.trim()}`.trim();
 
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(signupData),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || "Unable to create account.");
+      if (displayName) {
+        try {
+          await updateProfile(credential.user, { displayName });
+        } catch (profileError) {
+          console.error("Unable to update Firebase profile", profileError);
+        }
       }
 
-      setSignupMessage("Account created! Please check your email to verify.");
+      setSignupMessage("Account created! You can now log in with your email and password.");
+      setLoginEmail(email);
+      setLoginPassword("");
+
       setTimeout(() => {
         closeSignup();
       }, 2000);
     } catch (error) {
-      setSignupError(error.message || "Something went wrong. Please try again.");
+      setSignupError(getAuthErrorMessage(error));
     } finally {
       setSignupLoading(false);
     }
@@ -337,6 +401,11 @@ export default function Login() {
         {isSignup ? (
           <>
             <h2 className="card-title">Create Account</h2>
+            {!isFirebaseConfigured && (
+              <p className="reset-message error" role="alert">
+                {AUTH_DISABLED_MESSAGE}
+              </p>
+            )}
             <form className="login-form" onSubmit={handleSignupSubmit}>
               <div className="signup-row">
                 <div className="field">
@@ -446,7 +515,7 @@ export default function Login() {
                 <p className="reset-message error">{signupError}</p>
               )}
 
-              <button type="submit" className="btn" disabled={signupLoading}>
+              <button type="submit" className="btn" disabled={signupLoading || !isFirebaseConfigured}>
                 {signupLoading ? "Creating..." : "Create Account"}
               </button>
             </form>
@@ -465,6 +534,11 @@ export default function Login() {
         ) : (
           <>
             <h2 className="card-title">Login</h2>
+            {!isFirebaseConfigured && (
+              <p className="reset-message error" role="alert">
+                {AUTH_DISABLED_MESSAGE}
+              </p>
+            )}
 
             <form onSubmit={handleSubmit} className="login-form">
               <div className="field">
@@ -477,6 +551,8 @@ export default function Login() {
                   className="input"
                   placeholder="Email Address"
                   autoComplete="email"
+                  value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)}
                   required
                 />
               </div>
@@ -492,6 +568,8 @@ export default function Login() {
                     className="input"
                     placeholder="Password"
                     autoComplete="current-password"
+                    value={loginPassword}
+                    onChange={(event) => setLoginPassword(event.target.value)}
                     required
                   />
                   <button
@@ -514,8 +592,14 @@ export default function Login() {
                 </button>
               </div>
 
-              <button type="submit" className="btn">
-                Login
+              {loginError && (
+                <p className="reset-message error" aria-live="assertive">
+                  {loginError}
+                </p>
+              )}
+
+              <button type="submit" className="btn" disabled={loginLoading || !isFirebaseConfigured}>
+                {loginLoading ? "Logging in..." : "Login"}
               </button>
 
               <p className="hint">
