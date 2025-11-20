@@ -1,30 +1,123 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./dashboard.css";
-
-const MOCK_REQUESTS = [
-  { id: 101, name: "Harsh Patel", email: "harsh@example.com", submittedAt: "2025-01-03", status: "Pending", notes: "Submitted documents on time" },
-  { id: 102, name: "Sana Khan", email: "sana@example.com", submittedAt: "2025-01-04", status: "Pending", notes: "Event portfolio attached" },
-  { id: 103, name: "Liam Brown", email: "liam@example.com", submittedAt: "2024-12-28", status: "Approved", notes: "Verified references" },
-  { id: 104, name: "Noah Williams", email: "noah@example.com", submittedAt: "2024-12-26", status: "Rejected", notes: "Insufficient documentation" },
-];
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
+import { db, isFirebaseConfigured } from "../firebase";
+import { formatSnapshotTimestamp } from "../utils/firestoreHelpers";
 
 export default function ManagerApprovals() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Pending");
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!db) {
+      setLoading(false);
+      return undefined;
+    }
+    const unsub = onSnapshot(
+      collection(db, "ManagerRequests"),
+      (snapshot) => {
+        const docs = snapshot.docs
+          .map((docSnap) => {
+            const data = docSnap.data();
+            const { display, order } = formatSnapshotTimestamp(
+              data.submittedAt,
+              data.submittedAt || new Date().toISOString()
+            );
+            return {
+              id: docSnap.id,
+              name: data.name || "Applicant",
+              email: data.email || "",
+              notes: data.notes || "",
+              status: data.status || "Pending",
+              submittedAtDisplay: display,
+              _order: order,
+            };
+          })
+          .sort((a, b) => b._order - a._order)
+          .map(({ _order, submittedAtDisplay, ...rest }) => ({
+            ...rest,
+            submittedAt: submittedAtDisplay,
+          }));
+        setRequests(docs);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("[Firebase] Failed to load manager requests", error);
+        alert("Unable to load manager requests from Firebase.");
+        setLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [db]);
 
   const filtered = useMemo(() => {
-    return MOCK_REQUESTS.filter((r) => {
+    return requests.filter((r) => {
       const matchesQuery = `${r.name} ${r.email}`.toLowerCase().includes(query.toLowerCase());
       const matchesStatus = status === "All" || r.status === status;
       return matchesQuery && matchesStatus;
     });
-  }, [query, status]);
+  }, [query, status, requests]);
 
-  const handleApprove = (r) => alert(`Approved ${r.name}`);
-  const handleReject = (r) => alert(`Rejected ${r.name}`);
-  const handleView = (r) => alert(`Viewing documents for ${r.name}`);
+  const handleApprove = async (request) => {
+    if (!db) return;
+    try {
+      await updateDoc(doc(db, "ManagerRequests", request.id), {
+        status: "Approved",
+        reviewedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("[Firebase] Failed to approve request", request.id, error);
+      alert("Unable to approve request. Please try again.");
+    }
+  };
+
+  const handleReject = async (request) => {
+    if (!db) return;
+    try {
+      await updateDoc(doc(db, "ManagerRequests", request.id), {
+        status: "Rejected",
+        reviewedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("[Firebase] Failed to reject request", request.id, error);
+      alert("Unable to reject request. Please try again.");
+    }
+  };
+
+  const handleView = (request) =>
+    alert(`Applicant: ${request.name}\nEmail: ${request.email}\nNotes: ${request.notes}`);
+
+  const addRequest = async () => {
+    if (!db) return;
+    const name = window.prompt("Applicant name?");
+    if (!name) return;
+    const email = window.prompt("Email?");
+    if (!email) return;
+    const notes = window.prompt("Notes about the request?", "");
+    try {
+      await addDoc(collection(db, "ManagerRequests"), {
+        name,
+        email,
+        notes,
+        status: "Pending",
+        submittedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("[Firebase] Failed to add manager request", error);
+      alert("Unable to add request. Please try again.");
+    }
+  };
 
   return (
     <div className="main-content users-page">
@@ -32,8 +125,17 @@ export default function ManagerApprovals() {
         <h1 className="title">New Manager Approvals</h1>
         <div className="header-actions">
           <button className="action-btn" onClick={() => navigate("/admin/dashboard")}>Back to Dashboard</button>
+          <button className="action-btn primary" onClick={addRequest} disabled={!isFirebaseConfigured}>
+            Add Request
+          </button>
         </div>
       </div>
+
+      {!isFirebaseConfigured && (
+        <div className="alert warning" style={{ marginBottom: 16 }}>
+          Firebase keys are missing. Add them to <code>.env</code> to manage requests.
+        </div>
+      )}
 
       <div className="filters">
         <input
@@ -64,7 +166,11 @@ export default function ManagerApprovals() {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan="6" style={{ textAlign: "center", padding: 16 }}>Loading requests...</td>
+              </tr>
+            ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan="6" style={{ textAlign: "center", padding: 16 }}>No requests found.</td>
               </tr>
@@ -96,4 +202,3 @@ export default function ManagerApprovals() {
     </div>
   );
 }
-

@@ -1,4 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from "firebase/firestore";
+import { db } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import "./dashboard.css";
 import {
@@ -9,6 +22,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { formatSnapshotTimestamp } from "../utils/firestoreHelpers";
 
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("Dashboard");
@@ -68,95 +82,270 @@ export default function AdminDashboard() {
     { name: "May", BestImpression: 50, Stability: 55 },
   ];
 
-  // Inline mock data for User Management tables
-  const allUsers = [
-    { id: 1, name: "Alice Johnson", email: "alice@example.com", role: "Customer", status: "Active", joinedAt: "2024-01-05" },
-    { id: 2, name: "Bob Smith", email: "bob.smith@example.com", role: "Customer Support", status: "Active", joinedAt: "2024-02-17" },
-    { id: 3, name: "Carlos Diaz", email: "carlos@example.com", role: "Service Provider", status: "Pending", joinedAt: "2024-03-02" },
-    { id: 4, name: "Diana Lee", email: "diana@example.com", role: "Customer", status: "Suspended", joinedAt: "2023-12-22" },
-    { id: 5, name: "Emily Chen", email: "emily@example.com", role: "Service Provider", status: "Active", joinedAt: "2024-04-11" },
-  ];
+const defaultSettings = {
+  siteName: "Allora Service Hub",
+  maintenance: false,
+  defaultRole: "Customer",
+  emailNotifications: true,
+  itemsPerPage: 10,
+};
 
-  const visibleRows = useMemo(() => allUsers.filter((u) => u.role === userMgmtTab), [allUsers, userMgmtTab]);
+const getBadgeLabel = (value, fallback = "Unknown") => {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed || fallback;
+};
 
-  // Service Management state + mock data
-  const initialServices = [
-    { id: 201, service: "Wedding Photography", provider: "Emily Chen", category: "Photography", status: "Active", submittedAt: "2024-11-02" },
-    { id: 202, service: "Catering Deluxe", provider: "Carlos Diaz", category: "Catering", status: "Active", submittedAt: "2024-12-10" },
-    { id: 203, service: "Venue Decor", provider: "Diana Lee", category: "Decoration", status: "Suspended", submittedAt: "2024-10-22" },
-  ];
-  const initialListings = [
-    { id: 301, service: "DJ Night", provider: "Bob Smith", category: "Entertainment", submittedAt: "2025-01-06", status: "Pending" },
-    { id: 302, service: "Live Flowers", provider: "Alice Johnson", category: "Decoration", submittedAt: "2025-01-05", status: "Pending" },
-  ];
+const getBadgeClass = (value, fallback = "unknown") => {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.toLowerCase() : fallback;
+};
+
+  // User Management data
+  const [customers, setCustomers] = useState([]);
+
+  useEffect(() => {
+    if (!db) return undefined;
+    return onSnapshot(collection(db, "Customer"), (snapshot) => {
+      setCustomers(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+    });
+  }, [db]);
+
+  const visibleRows = useMemo(
+    () => customers.filter((u) => u.role === userMgmtTab),
+    [customers, userMgmtTab]
+  );
+
+  // Service Management state + Firestore data
+  const [services, setServices] = useState([]);
+  const [listings, setListings] = useState([]);
   const [serviceView, setServiceView] = useState("Manage Services");
-  const [services, setServices] = useState(initialServices);
-  const [listings, setListings] = useState(initialListings);
 
-  const toggleServiceStatus = (id) =>
-    setServices((prev) => prev.map((s) => (s.id === id ? { ...s, status: s.status === "Suspended" ? "Active" : "Suspended" } : s)));
-  const deleteService = (id) => setServices((prev) => prev.filter((s) => s.id !== id));
-  const approveListing = (id) => setListings((prev) => prev.map((l) => (l.id === id ? { ...l, status: "Approved" } : l)));
-  const rejectListing = (id) => setListings((prev) => prev.map((l) => (l.id === id ? { ...l, status: "Rejected" } : l)));
+  useEffect(() => {
+    if (!db) return undefined;
+    return onSnapshot(collection(db, "Services"), (snapshot) => {
+      const docs = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      setServices(docs);
+      setListings(docs);
+    });
+  }, [db]);
+
+  const updateServiceStatus = async (serviceId, status) => {
+    if (!db) return;
+    try {
+      await updateDoc(doc(db, "Services", serviceId), {
+        status,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("[Firebase] Failed to update service", serviceId, error);
+      alert("Unable to update the service. Please try again.");
+    }
+  };
+
+  const toggleServiceStatus = async (serviceId) => {
+    const current = services.find((service) => service.id === serviceId);
+    if (!current) return;
+    const nextStatus = current.status === "Suspended" ? "Active" : "Suspended";
+    await updateServiceStatus(serviceId, nextStatus);
+  };
+
+  const deleteService = async (serviceId) => {
+    if (!db) return;
+    if (!window.confirm("Delete this service permanently?")) return;
+    try {
+      await deleteDoc(doc(db, "Services", serviceId));
+    } catch (error) {
+      console.error("[Firebase] Failed to delete service", serviceId, error);
+      alert("Unable to delete the service. Please try again.");
+    }
+  };
+
+  const approveListing = async (serviceId) => {
+    await updateServiceStatus(serviceId, "Approved");
+  };
+
+  const rejectListing = async (serviceId) => {
+    await updateServiceStatus(serviceId, "Rejected");
+  };
 
   // System Management: categories
-  const initialCategories = [
-    { id: 401, name: "Photography", servicesCount: 12, visible: true },
-    { id: 402, name: "Catering", servicesCount: 8, visible: true },
-    { id: 403, name: "Decoration", servicesCount: 5, visible: false },
-  ];
   const [systemView, setSystemView] = useState("Manage Categories");
-  const [categories, setCategories] = useState(initialCategories);
-  const addCategory = () => {
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    if (!db) return undefined;
+    return onSnapshot(collection(db, "Category"), (snapshot) => {
+      setCategories(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            name: data.name || "Unnamed",
+            servicesCount: data.servicesCount ?? 0,
+            visible: data.visible ?? true,
+          };
+        })
+      );
+    });
+  }, [db]);
+
+  const addCategory = async () => {
+    if (!db) return;
     const name = window.prompt("New category name?");
     if (!name) return;
-    setCategories((prev) => [
-      ...prev,
-      { id: Date.now(), name, servicesCount: 0, visible: true },
-    ]);
+    try {
+      await addDoc(collection(db, "Category"), {
+        name,
+        servicesCount: 0,
+        visible: true,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("[Firebase] Failed to add category", error);
+      alert("Unable to add category. Please try again.");
+    }
   };
-  const toggleCategoryVisibility = (id) =>
-    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, visible: !c.visible } : c)));
-  const deleteCategory = (id) => setCategories((prev) => prev.filter((c) => c.id !== id));
 
-  // Service Categories: sample services view
-  const initialCategoryServices = [
-    { id: 501, service: "Bridal Makeup", category: "Beauty", provider: "Glam Studio", status: "Active" },
-    { id: 502, service: "Event Catering", category: "Catering", provider: "Taste Buds", status: "Active" },
-    { id: 503, service: "Live Band", category: "Entertainment", provider: "SoundWave", status: "Pending" },
-    { id: 504, service: "Hall Decoration", category: "Decoration", provider: "DecoCraft", status: "Suspended" },
-    { id: 505, service: "Portrait Photography", category: "Photography", provider: "LensWorks", status: "Active" },
-  ];
-  const [categoryServices, setCategoryServices] = useState(initialCategoryServices);
-  const addCategoryService = () => {
+  const toggleCategoryVisibility = async (id) => {
+    if (!db) return;
+    const target = categories.find((c) => c.id === id);
+    if (!target) return;
+    try {
+      await updateDoc(doc(db, "Category", id), {
+        visible: !target.visible,
+      });
+    } catch (error) {
+      console.error("[Firebase] Failed to update category", id, error);
+      alert("Unable to update category visibility. Please try again.");
+    }
+  };
+
+  const deleteCategory = async (id) => {
+    if (!db) return;
+    try {
+      await deleteDoc(doc(db, "Category", id));
+    } catch (error) {
+      console.error("[Firebase] Failed to delete category", id, error);
+      alert("Unable to delete category. Please try again.");
+    }
+  };
+
+  // Service Categories data
+  const SERVICE_CATEGORY_COLLECTION = "ServiceCategories";
+  const [categoryServices, setCategoryServices] = useState([]);
+
+  useEffect(() => {
+    if (!db) return undefined;
+    return onSnapshot(collection(db, SERVICE_CATEGORY_COLLECTION), (snapshot) => {
+      setCategoryServices(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            service: data.service || "Untitled",
+            category: data.category || "General",
+            provider: data.provider || "Unknown",
+            status: data.status || "Active",
+          };
+        })
+      );
+    });
+  }, [db]);
+
+  const addCategoryService = async () => {
+    if (!db) return;
     const name = window.prompt("Service name?");
     if (!name) return;
     const category = window.prompt("Category?");
     const provider = window.prompt("Provider?");
-    setCategoryServices((prev) => [
-      ...prev,
-      { id: Date.now(), service: name, category: category || "General", provider: provider || "Unknown", status: "Active" },
-    ]);
+    try {
+      await addDoc(collection(db, SERVICE_CATEGORY_COLLECTION), {
+        service: name,
+        category: category || "General",
+        provider: provider || "Unknown",
+        status: "Active",
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("[Firebase] Failed to add service category", error);
+      alert("Unable to add the service. Please try again.");
+    }
   };
-  const toggleCategoryService = (id) =>
-    setCategoryServices((prev) => prev.map((s) => (s.id === id ? { ...s, status: s.status === "Suspended" ? "Active" : "Suspended" } : s)));
-  const deleteCategoryService = (id) => setCategoryServices((prev) => prev.filter((s) => s.id !== id));
+
+  const toggleCategoryService = async (id) => {
+    if (!db) return;
+    const serviceRecord = categoryServices.find((s) => s.id === id);
+    if (!serviceRecord) return;
+    const nextStatus = serviceRecord.status === "Suspended" ? "Active" : "Suspended";
+    try {
+      await updateDoc(doc(db, SERVICE_CATEGORY_COLLECTION, id), { status: nextStatus });
+    } catch (error) {
+      console.error("[Firebase] Failed to update service category", id, error);
+      alert("Unable to update the service status. Please try again.");
+    }
+  };
+
+  const deleteCategoryService = async (id) => {
+    if (!db) return;
+    try {
+      await deleteDoc(doc(db, SERVICE_CATEGORY_COLLECTION, id));
+    } catch (error) {
+      console.error("[Firebase] Failed to delete service category", id, error);
+      alert("Unable to delete the service. Please try again.");
+    }
+  };
 
   // Issue Resolution: queue + actions
-  const initialIssues = [
-    { id: 701, subject: "Payment not processed", customer: "Alice Johnson", priority: "High", status: "Open", createdAt: "2025-01-05" },
-    { id: 702, subject: "App login issue", customer: "Bob Smith", priority: "Medium", status: "Open", createdAt: "2025-01-04" },
-    { id: 703, subject: "Service listing correction", customer: "Carlos Diaz", priority: "Low", status: "Resolved", createdAt: "2024-12-29" },
-  ];
   const [issueFilter, setIssueFilter] = useState("Open");
-  const [issues, setIssues] = useState(initialIssues);
+  const [issues, setIssues] = useState([]);
+
+  useEffect(() => {
+    if (!db) return undefined;
+    const ticketsQuery = query(collection(db, "tickets"), orderBy("createdAt", "desc"));
+    return onSnapshot(ticketsQuery, (snapshot) => {
+      const docs = snapshot.docs
+        .map((docSnap) => {
+          const data = docSnap.data();
+          const { display, order } = formatSnapshotTimestamp(
+            data.createdAt,
+            data.createdAt || new Date().toISOString().slice(0, 10)
+          );
+          return {
+            id: docSnap.id,
+            subject: data.subject || "Untitled",
+            customer: data.customer || "Unknown",
+            priority: data.priority || "Low",
+            status: data.status || "Open",
+            createdAt: display,
+            _order: order,
+          };
+        })
+        .sort((a, b) => b._order - a._order)
+        .map(({ _order, ...rest }) => rest);
+      setIssues(docs);
+    });
+  }, [db]);
+
   const filteredIssues = useMemo(
     () => issues.filter((i) => (issueFilter === "All" ? true : i.status === issueFilter)),
     [issues, issueFilter]
   );
-  const resolveIssue = (id) => setIssues((prev) => prev.map((i) => (i.id === id ? { ...i, status: "Resolved" } : i)));
-  const closeIssue = (id) => setIssues((prev) => prev.map((i) => (i.id === id ? { ...i, status: "Closed" } : i)));
-  const reopenIssue = (id) => setIssues((prev) => prev.map((i) => (i.id === id ? { ...i, status: "Open" } : i)));
+
+  const updateIssueStatus = async (id, status) => {
+    if (!db) return;
+    try {
+      await updateDoc(doc(db, "tickets", id), { status });
+    } catch (error) {
+      console.error("[Firebase] Failed to update ticket", id, error);
+      alert("Unable to update the ticket. Please try again.");
+    }
+  };
+
+  const resolveIssue = (id) => updateIssueStatus(id, "Resolved");
+  const closeIssue = (id) => updateIssueStatus(id, "Closed");
+  const reopenIssue = (id) => updateIssueStatus(id, "Open");
 
   // Security management: roles and permissions
   const defaultPerms = [
@@ -166,26 +355,68 @@ export default function AdminDashboard() {
     "send_notifications",
     "view_audit",
   ];
-  const [roles, setRoles] = useState([
-    { id: 8001, name: "Owner", members: 1, perms: new Set(defaultPerms) },
-    { id: 8002, name: "Administrator", members: 2, perms: new Set(["view_users","manage_services","manage_categories","send_notifications"]) },
-    { id: 8003, name: "Support", members: 3, perms: new Set(["view_users","send_notifications"]) },
-  ]);
-  const addRole = () => {
+  const [roles, setRoles] = useState([]);
+
+  useEffect(() => {
+    if (!db) return undefined;
+    return onSnapshot(collection(db, "Roles"), (snapshot) => {
+      setRoles(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            name: data.name || "Role",
+            members: data.members ?? 0,
+            perms: new Set(data.perms || []),
+          };
+        })
+      );
+    });
+  }, [db]);
+
+  const addRole = async () => {
+    if (!db) return;
     const name = window.prompt("New role name?");
     if (!name) return;
-    setRoles((prev) => [...prev, { id: Date.now(), name, members: 0, perms: new Set(["view_users"]) }]);
+    try {
+      await addDoc(collection(db, "Roles"), {
+        name,
+        members: 0,
+        perms: ["view_users"],
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("[Firebase] Failed to add role", error);
+      alert("Unable to add role. Please try again.");
+    }
   };
-  const deleteRole = (id) => setRoles((prev) => prev.filter((r) => r.id !== id));
-  const toggleRolePerm = (id, key) =>
+
+  const deleteRole = async (id) => {
+    if (!db) return;
+    try {
+      await deleteDoc(doc(db, "Roles", id));
+    } catch (error) {
+      console.error("[Firebase] Failed to delete role", id, error);
+      alert("Unable to delete role. Please try again.");
+    }
+  };
+
+  const toggleRolePerm = async (id, key) => {
+    if (!db) return;
+    const role = roles.find((r) => r.id === id);
+    if (!role) return;
+    const next = new Set(role.perms);
+    next.has(key) ? next.delete(key) : next.add(key);
     setRoles((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        const next = new Set(r.perms);
-        next.has(key) ? next.delete(key) : next.add(key);
-        return { ...r, perms: next };
-      })
+      prev.map((r) => (r.id === id ? { ...r, perms: new Set(next) } : r))
     );
+    try {
+      await updateDoc(doc(db, "Roles", id), { perms: Array.from(next) });
+    } catch (error) {
+      console.error("[Firebase] Failed to update role permissions", id, error);
+      alert("Unable to update permissions. Please try again.");
+    }
+  };
 
   // Notification Center: compose + history
   const [notificationView, setNotificationView] = useState("Compose");
@@ -195,59 +426,87 @@ export default function AdminDashboard() {
     subject: "",
     message: "",
   });
-  const [notifications, setNotifications] = useState([
-    { id: 9001, subject: "Welcome to Allora", audience: "All Users", channel: "In-App", sentAt: "2024-12-20 10:00", status: "Sent" },
-  ]);
-  const sendNotification = () => {
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    if (!db) return undefined;
+    return onSnapshot(collection(db, "Notification"), (snapshot) => {
+      const docs = snapshot.docs
+        .map((docSnap) => {
+          const data = docSnap.data();
+          const { display, order } = formatSnapshotTimestamp(data.sentAt, "");
+          return {
+            id: docSnap.id,
+            subject: data.subject || "",
+            audience: data.audience || "",
+            channel: data.channel || "Email",
+            status: data.status || "Sent",
+            sentAt: display,
+            _order: order,
+          };
+        })
+        .sort((a, b) => b._order - a._order)
+        .map(({ _order, ...rest }) => rest);
+      setNotifications(docs);
+    });
+  }, [db]);
+
+  const sendNotification = async () => {
+    if (!db) return;
     if (!compose.subject.trim() || !compose.message.trim()) {
       alert("Please enter subject and message");
       return;
     }
-    const sentAt = new Date().toISOString().slice(0, 16).replace("T", " ");
-    setNotifications((prev) => [
-      { id: Date.now(), subject: compose.subject, audience: compose.audience, channel: compose.channel, sentAt, status: "Sent" },
-      ...prev,
-    ]);
-    setCompose({ ...compose, subject: "", message: "" });
-    alert("Notification sent");
-  };
-
-  // System Management: site settings (simple local persistence)
-  const [settings, setSettings] = useState(() => {
     try {
-      const raw = localStorage.getItem("siteSettings");
-      const parsed = raw ? JSON.parse(raw) : {};
-      return {
-        siteName: parsed.siteName || "Allora Service Hub",
-        maintenance: parsed.maintenance || false,
-        defaultRole: parsed.defaultRole || "Customer",
-        emailNotifications: parsed.emailNotifications ?? true,
-        itemsPerPage: parsed.itemsPerPage || 10,
-      };
-    } catch (_) {
-      return {
-        siteName: "Allora Service Hub",
-        maintenance: false,
-        defaultRole: "Customer",
-        emailNotifications: true,
-        itemsPerPage: 10,
-      };
+      await addDoc(collection(db, "Notification"), {
+        audience: compose.audience,
+        channel: compose.channel,
+        subject: compose.subject,
+        message: compose.message,
+        status: "Sent",
+        sentAt: serverTimestamp(),
+      });
+      setCompose((prev) => ({ ...prev, subject: "", message: "" }));
+      alert("Notification sent");
+    } catch (error) {
+      console.error("[Firebase] Failed to send notification", error);
+      alert("Unable to send notification. Please try again.");
     }
-  });
-
-  const saveSettings = () => {
-    localStorage.setItem("siteSettings", JSON.stringify(settings));
-    alert("Settings saved");
   };
 
-  const resetSettings = () => {
-    setSettings({
-      siteName: "Allora Service Hub",
-      maintenance: false,
-      defaultRole: "Customer",
-      emailNotifications: true,
-      itemsPerPage: 10,
+  // System Management: site settings stored in Firestore
+  const [settings, setSettings] = useState(defaultSettings);
+
+  useEffect(() => {
+    if (!db) return undefined;
+    const settingsRef = doc(db, "Admin", "siteSettings");
+    return onSnapshot(settingsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setSettings({ ...defaultSettings, ...snapshot.data() });
+      }
     });
+  }, [db]);
+
+  const saveSettings = async () => {
+    if (!db) return;
+    try {
+      await setDoc(doc(db, "Admin", "siteSettings"), settings, { merge: true });
+      alert("Settings saved");
+    } catch (error) {
+      console.error("[Firebase] Failed to save settings", error);
+      alert("Unable to save settings. Please try again.");
+    }
+  };
+
+  const resetSettings = async () => {
+    setSettings(defaultSettings);
+    if (!db) return;
+    try {
+      await setDoc(doc(db, "Admin", "siteSettings"), defaultSettings);
+    } catch (error) {
+      console.error("[Firebase] Failed to reset settings", error);
+      alert("Unable to reset settings. Please try again.");
+    }
   };
 
   return (
@@ -436,7 +695,11 @@ export default function AdminDashboard() {
                             <td>{s.service}</td>
                             <td>{s.provider}</td>
                             <td>{s.category}</td>
-                            <td><span className={`badge ${s.status.toLowerCase()}`}>{s.status}</span></td>
+                            <td>
+                              <span className={`badge ${getBadgeClass(s.status)}`}>
+                                {getBadgeLabel(s.status)}
+                              </span>
+                            </td>
                             <td>{s.submittedAt}</td>
                             <td className="table-actions">
                               <button className="action-btn" onClick={() => toggleServiceStatus(s.id)}>
@@ -473,7 +736,11 @@ export default function AdminDashboard() {
                             <td>{l.provider}</td>
                             <td>{l.category}</td>
                             <td>{l.submittedAt}</td>
-                            <td><span className={`badge ${l.status.toLowerCase()}`}>{l.status}</span></td>
+                            <td>
+                              <span className={`badge ${getBadgeClass(l.status)}`}>
+                                {getBadgeLabel(l.status)}
+                              </span>
+                            </td>
                             <td className="table-actions">
                               {l.status === "Pending" ? (
                                 <>
@@ -520,7 +787,11 @@ export default function AdminDashboard() {
                             <td>{s.service}</td>
                             <td>{s.category}</td>
                             <td>{s.provider}</td>
-                            <td><span className={`badge ${s.status.toLowerCase()}`}>{s.status}</span></td>
+                            <td>
+                              <span className={`badge ${getBadgeClass(s.status)}`}>
+                                {getBadgeLabel(s.status)}
+                              </span>
+                            </td>
                             <td className="table-actions">
                               <button className="action-btn" onClick={() => toggleCategoryService(s.id)}>
                                 {s.status === "Suspended" ? "Activate" : "Suspend"}
@@ -735,8 +1006,16 @@ export default function AdminDashboard() {
                           <tr key={iss.id}>
                             <td>{iss.subject}</td>
                             <td>{iss.customer}</td>
-                            <td><span className={`badge ${iss.priority.toLowerCase()}`}>{iss.priority}</span></td>
-                            <td><span className={`badge ${iss.status.toLowerCase()}`}>{iss.status}</span></td>
+                            <td>
+                              <span className={`badge ${getBadgeClass(iss.priority, "low")}`}>
+                                {getBadgeLabel(iss.priority)}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`badge ${getBadgeClass(iss.status)}`}>
+                                {getBadgeLabel(iss.status)}
+                              </span>
+                            </td>
                             <td>{iss.createdAt}</td>
                             <td className="table-actions">
                               {iss.status === "Open" && (
@@ -972,7 +1251,11 @@ export default function AdminDashboard() {
                           <td>{u.name}</td>
                           <td>{u.email}</td>
                           <td>{u.role}</td>
-                          <td><span className={`badge ${u.status.toLowerCase()}`}>{u.status}</span></td>
+                          <td>
+                            <span className={`badge ${getBadgeClass(u.status)}`}>
+                              {getBadgeLabel(u.status)}
+                            </span>
+                          </td>
                           <td>{u.joinedAt}</td>
                         </tr>
                       ))
