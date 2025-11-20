@@ -1,263 +1,300 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import NavigationBar from "../components/NavigationBar";
+import { ReactComponent as InfinityMark } from "../assets/infinity-logo.svg";
 import "../dashboard.css";
 
-const demoServices = [
+const FEATURES = [
   {
-    title: "House Cleaning",
-    description: "Trusted cleaners rated by local customers.",
-    image:
-      "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80",
-    category: "Home Services",
+    title: "Vetted professionals",
+    copy: "Insurance, background checks, and performance reviews on every profile.",
   },
   {
-    title: "Web Design Sprint",
-    description: "Launch-ready web experiences crafted in a week.",
-    image:
-      "https://images.unsplash.com/photo-1509395176047-4a66953fd231?auto=format&fit=crop&w=800&q=80",
-    category: "Digital Services",
+    title: "Transparent pricing",
+    copy: "Instant quotes with no surprise add-ons or hidden marketplace fees.",
   },
   {
-    title: "Personal Trainers",
-    description: "Find specialists to keep your goals on track.",
-    image:
-      "https://images.unsplash.com/photo-1554284126-aa88f22d8b74?auto=format&fit=crop&w=800&q=80",
-    category: "Health & Wellness",
-  },
-  {
-    title: "Garden Care",
-    description: "Skilled gardeners for tidy, healthy outdoor spaces.",
-    image:
-      "https://images.unsplash.com/photo-1472145246862-b24cf25c4a36?auto=format&fit=crop&w=800&q=80",
-    category: "Outdoor Services",
-  },
-  {
-    title: "Event Photography",
-    description: "Capture celebrations with cinematic storytelling.",
-    image:
-      "https://images.unsplash.com/photo-1518895949257-7621c3c786d4?auto=format&fit=crop&w=800&q=80",
-    category: "Events & Entertainment",
-  },
-  {
-    title: "Mobile Car Grooming",
-    description: "Detailing pros that come direct to your driveway.",
-    image:
-      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80",
-    category: "Automotive",
+    title: "Concierge support",
+    copy: "Schedule changes, access notes, and proof-of-work handled for you.",
   },
 ];
 
-const popularSearches = ["House Cleaning", "Web Design", "Personal Trainers"];
-
-const SERVICE_TYPES = [
-  "Plumbers",
-  "Renovations",
-  "Electricians",
-  "Builders",
-  "Website",
-  "Mobile App",
-  "Painters",
-  "Pest Control",
-  "Concreting",
-  "Glazing",
-  "Appliance Repair",
-  "Dog Walker",
-];
-
-const trustBrands = ["PayPrime", "HubSpot", "Freshdesk", "Zoho", "Chargebee"];
-
-const featureCards = [
+const SERVICES = [
   {
-    title: "City curators",
-    copy: "Local Allora hosts meet every professional and capture their latest work.",
+    title: "Home upkeep",
+    copy: "Deep cleans, handyman visits, appliance repair, and garden care in one smooth plan.",
+    tags: ["Cleaning", "Repairs", "Garden"],
   },
   {
-    title: "Calm tracking",
-    copy: "Status cards, nudges, and receipts live in one shared timeline that feels human.",
+    title: "Workspace support",
+    copy: "IT setup, movers, floor care, and facility teams for remote or HQ offices.",
+    tags: ["IT setup", "Office moves", "Facility"],
   },
   {
-    title: "Support that stays",
-    copy: "Concierge teams monitor each booking and jump in before issues become escalations.",
+    title: "Lifestyle & wellness",
+    copy: "Tutors, wellness coaches, chefs, chauffeurs, and concierge errands for families.",
+    tags: ["Tutors", "Wellness", "Concierge"],
   },
 ];
 
-const journeySteps = [
+const TESTIMONIALS = [
   {
-    title: "Tell us the task",
-    copy: "Share a few details or upload a quick photo. We keep intake light but useful.",
+    quote:
+      "Allora keeps our property portfolio humming. We submit requests once and see photos and invoices automatically.",
+    author: "Sonia Patel",
+    role: "Community Manager, Horizon Living",
   },
   {
-    title: "Review curated matches",
-    copy: "Within an hour you�ll receive tailored pros with transparent pricing and availability.",
-  },
-  {
-    title: "Book and relax",
-    copy: "Track milestones, message securely, and rely on Allora support if anything drifts.",
+    quote:
+      "We run our office ops through Allora—everything from IT setup to weekly cleaners is organized in one dashboard.",
+    author: "Marcus Lee",
+    role: "Operations Lead, Brightlabs",
   },
 ];
+
+const LOGOS = ["Northwind", "Brightlabs", "Fika Roasters", "UrbanNest", "Bluefield Ops"];
+const HERO_METRICS = [
+  { label: "Verified partners", value: "1,200+" },
+  { label: "Average rating", value: "4.9 / 5" },
+  { label: "Avg match time", value: "45 min" },
+];
+const SERVICE_BADGES = ["Home", "Workspace", "Lifestyle", "Concierge"];
+const VISIT_PROGRESS = 72;
 
 export default function Dashboard() {
-  const [activeSection, setActiveSection] = useState("discover");
-  const [selectedService, setSelectedService] = useState(SERVICE_TYPES[0]);
-  const [city, setCity] = useState("");
   const navigate = useNavigate();
+  const [service, setService] = useState("");
+  const [city, setCity] = useState("");
 
-  const handleSectionChange = (section) => {
-    setActiveSection(section);
-    const target = document.getElementById(section);
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
-
-  const handleServiceTypeSelect = (serviceType) => {
-    navigate("/services", { state: { prefill: serviceType } });
-  };
-
-  const handleHeroSubmit = (event) => {
+  const handleSearch = (event) => {
     event.preventDefault();
-    handleServiceTypeSelect(selectedService);
+    navigate("/services", { state: { search: service || "all services", city: city || "nearby" } });
   };
 
   return (
-    <div className="dashboard-page clean-dashboard">
-      <div className="dashboard-circle circle-top" aria-hidden="true" />
-      <div className="dashboard-circle circle-bottom" aria-hidden="true" />
-
-      <NavigationBar activeSection={activeSection} onSectionSelect={handleSectionChange} />
-
-      <main className="clean-main">
-        <section className="clean-hero" id="discover">
-          <div className="clean-hero-left">
-            <p className="clean-label">Curated & local</p>
-            <h1>Find trusted professionals without scrolling through noise.</h1>
-            <p>
-              Allora pairs neighbourhood expertise with modern tooling so you can browse, book, and track services from
-              one calm dashboard.
-            </p>
-            <div className="clean-popular">
-              <span>Popular now</span>
-              <div className="clean-popular-tags">
-                {popularSearches.map((item) => (
-                  <span key={item}>{item}</span>
+    <div className="allora-website">
+      <NavigationBar />
+      <main className="website-shell">
+        <section className="hero" aria-labelledby="dashboardHeroHeading">
+          <div className="hero-glow" aria-hidden="true" />
+          <div className="hero-logo-mark" aria-hidden="true">
+            <InfinityMark />
+          </div>
+          <div className="hero-grid">
+            <div className="hero-copy">
+              <div className="hero-pill">
+                {SERVICE_BADGES.map((badge) => (
+                  <span key={badge}>{badge}</span>
                 ))}
+              </div>
+              <p className="eyebrow">Allora service hub</p>
+              <h1 id="dashboardHeroHeading">Book trusted professionals for every home, workspace, or lifestyle need.</h1>
+              <p className="hero-subcopy">
+                Allora layers curated pros, concierge scheduling, and proof-of-work in one place. Submit a single brief
+                and watch every service unfold live.
+              </p>
+              <form className="hero-form" onSubmit={handleSearch}>
+                <label className="hero-form-field" htmlFor="heroServiceInput">
+                  <span>What do you need?</span>
+                  <input
+                    id="heroServiceInput"
+                    type="text"
+                    placeholder="Deep clean, IT setup, chef..."
+                    value={service}
+                    onChange={(event) => setService(event.target.value)}
+                  />
+                </label>
+                <label className="hero-form-field" htmlFor="heroCityInput">
+                  <span>Where?</span>
+                  <input
+                    id="heroCityInput"
+                    type="text"
+                    placeholder="City or neighborhood"
+                    value={city}
+                    onChange={(event) => setCity(event.target.value)}
+                  />
+                </label>
+                <button type="submit" className="hero-submit">
+                  Plan my service
+                </button>
+              </form>
+              <div className="hero-meta">
+                {HERO_METRICS.map((metric) => (
+                  <article key={metric.label}>
+                    <strong>{metric.value}</strong>
+                    <span>{metric.label}</span>
+                  </article>
+                ))}
+                <div className="hero-avatars" aria-label="Concierge agents online">
+                  <span aria-hidden="true">SP</span>
+                  <span aria-hidden="true">ML</span>
+                  <span aria-hidden="true">NA</span>
+                  <p>Concierge desk live 24/7</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="hero-panels">
+              <div className="hero-journey-card glass-card">
+                <div className="hero-journey-chip">Next visit</div>
+                <div className="hero-journey-title">
+                  <h3>Workspace reset</h3>
+                  <span>Thu · 09:30 AM</span>
+                </div>
+                <div className="hero-journey-route">
+                  <div>
+                    <p>Location</p>
+                    <strong>Soho Loft, NYC</strong>
+                  </div>
+                  <div className="hero-journey-divider" aria-hidden="true" />
+                  <div>
+                    <p>Specialist</p>
+                    <strong>Nova Facilities</strong>
+                  </div>
+                </div>
+                <p className="hero-journey-copy">
+                  Equipment calibration, conference reset, and weekly clean—pre-approved with transparent pricing.
+                </p>
+                <div className="hero-journey-progress">
+                  <div>
+                    <span>Preparation</span>
+                    <span>{VISIT_PROGRESS}%</span>
+                  </div>
+                  <div className="progress-track">
+                    <span className="progress-fill" style={{ width: `${VISIT_PROGRESS}%` }} />
+                  </div>
+                </div>
+                <div className="hero-journey-team">
+                  <div className="hero-journey-avatars">
+                    <span aria-hidden="true">JL</span>
+                    <span aria-hidden="true">BT</span>
+                    <span aria-hidden="true">NA</span>
+                  </div>
+                  <div>
+                    <p>Concierge lead</p>
+                    <strong>Nova Atkins</strong>
+                  </div>
+                </div>
+                <button type="button" className="hero-card-btn" onClick={() => navigate("/dashboard")}>
+                  View live timeline
+                </button>
+              </div>
+
+              <div className="hero-mini-grid">
+                <article className="glass-card">
+                  <p>Auto-matched in</p>
+                  <strong>45 min</strong>
+                  <span>Avg this week</span>
+                </article>
+                <article className="glass-card">
+                  <p>Open requests</p>
+                  <strong>08</strong>
+                  <span>All on track</span>
+                </article>
+                <article className="glass-card highlight">
+                  <p>Concierge VIP</p>
+                  <strong>Included</strong>
+                  <span>Service guarantee</span>
+                </article>
+              </div>
+              <div className="hero-floating-pill glass-card">
+                <p>“Allora keeps every property humming.”</p>
+                <span>Sonia · Horizon Living</span>
               </div>
             </div>
           </div>
-          <form className="clean-hero-form" onSubmit={handleHeroSubmit}>
-            <div className="clean-form-field">
-              <label htmlFor="hero-service">Service</label>
-              <select
-                id="hero-service"
-                value={selectedService}
-                onChange={(event) => setSelectedService(event.target.value)}
-              >
-                {SERVICE_TYPES.map((service) => (
-                  <option key={service} value={service}>
-                    {service}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="clean-form-field">
-              <label htmlFor="hero-city">City</label>
-              <input
-                id="hero-city"
-                type="text"
-                placeholder="e.g., Bengaluru"
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-              />
-            </div>
-            <div className="clean-form-field">
-              <label htmlFor="hero-notes">Notes (optional)</label>
-              <textarea id="hero-notes" placeholder="Share timing, style, or budget cues." rows={3} />
-            </div>
-            <button type="submit">See curated providers</button>
-          </form>
         </section>
 
-        <section className="clean-trust">
-          <p>Trusted by operations teams at</p>
-          <div className="clean-trust-logos">
-            {trustBrands.map((brand) => (
-              <span key={brand}>{brand}</span>
-            ))}
-          </div>
+        <section className="brand-strip" aria-label="Companies using Allora">
+          {LOGOS.map((logo) => (
+            <span key={logo}>{logo}</span>
+          ))}
         </section>
 
-        <section className="clean-highlights">
-          <div className="clean-section-heading">
-            <h2>The Allora promise</h2>
-            <p>We keep the experience warm, transparent, and reliably on time.</p>
-          </div>
-          <div className="clean-highlights-grid">
-            {featureCards.map((card) => (
-              <article key={card.title}>
-                <h3>{card.title}</h3>
-                <p>{card.copy}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="clean-services" aria-label="Featured services">
-          <div className="clean-section-heading">
-            <h2>Fresh from the concierge desk</h2>
-            <p>Scene-setting packages curated with photos, pricing, and availability.</p>
-          </div>
-          <div className="clean-services-grid">
-            {demoServices.map((service) => (
-              <article key={service.title} className="clean-service-card">
-                <img src={service.image} alt={service.title} loading="lazy" />
-                <div className="clean-service-body">
-                  <span>{service.category}</span>
-                  <h3>{service.title}</h3>
-                  <p>{service.description}</p>
-                  <button type="button" onClick={() => handleServiceTypeSelect(service.title)}>
-                    Book now
-                  </button>
+        <section className="feature-section">
+          <header>
+            <p className="eyebrow">Why choose Allora</p>
+            <h2>Built for busy households and operations teams.</h2>
+            <p>
+              Transparent pricing, concierge scheduling, and proof-of-work are bundled together so customers, service
+              providers, and support teams share the same view.
+            </p>
+          </header>
+          <div className="feature-grid">
+            {FEATURES.map((feature, index) => (
+              <article key={feature.title} className="feature-card">
+                <span className="feature-index">{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <h3>{feature.title}</h3>
+                  <p>{feature.copy}</p>
                 </div>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="clean-steps">
-          <div className="clean-section-heading">
-            <h2>How it works</h2>
-            <p>Three friendly steps from idea to completed service.</p>
-          </div>
-          <div className="clean-steps-grid">
-            {journeySteps.map((step, index) => (
-              <article key={step.title}>
-                <span>{`0${index + 1}`}</span>
-                <h3>{step.title}</h3>
-                <p>{step.copy}</p>
+        <section className="service-section">
+          <header>
+            <p className="eyebrow">What we cover</p>
+            <h2>Curated specialists across every service category.</h2>
+            <p>Pick a category to view vetted professionals in your city and lock in the visit in minutes.</p>
+          </header>
+          <div className="service-grid">
+            {SERVICES.map((item) => (
+              <article key={item.title} className="service-card glass-card">
+                <div className="service-card-header">
+                  <h3>{item.title}</h3>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/services", { state: { search: item.title } })}
+                  >
+                    View specialists
+                  </button>
+                </div>
+                <p>{item.copy}</p>
+                <div className="tag-row">
+                  {item.tags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </div>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="clean-cta" aria-label="Get started">
-          <div className="clean-cta-card">
-            <div>
-              <p className="clean-label">Ready in minutes</p>
-              <h2>Create your request and let Allora handle the follow-up.</h2>
-              <p>
-                From quotes to check-ins, everything lives inside one workspace. Customers stay informed and providers
-                stay focused on the craft.
-              </p>
-            </div>
-            <div className="clean-actions">
-              <button type="button" onClick={() => navigate("/get-started")}>
-                Start a request
-              </button>
-              <button type="button" className="ghost" onClick={() => navigate("/insights#contact")}>
-                Talk to support
-              </button>
-            </div>
+        <section className="testimonial-section">
+          <header>
+            <p className="eyebrow">Testimonials</p>
+            <h2>Customers trust Allora for consistent, premium service.</h2>
+          </header>
+          <div className="testimonial-grid">
+            {TESTIMONIALS.map((testimonial) => (
+              <article key={testimonial.author} className="testimonial-card glass-card">
+                <span className="quote-mark">“</span>
+                <p>{testimonial.quote}</p>
+                <strong>{testimonial.author}</strong>
+                <span>{testimonial.role}</span>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="cta-section glass-card">
+          <div>
+            <p className="eyebrow">Ready to go?</p>
+            <h2>Share your next request and we&apos;ll line up the visit.</h2>
+            <p>
+              Tell us what you need, when, and where. The Allora concierge desk handles scheduling, updates, and
+              proof-of-work.
+            </p>
+          </div>
+          <div className="cta-actions">
+            <button type="button" onClick={() => navigate("/services")}>
+              Create a request
+            </button>
+            <button type="button" className="ghost" onClick={() => navigate("/get-started")}>
+              Talk to concierge
+            </button>
           </div>
         </section>
       </main>

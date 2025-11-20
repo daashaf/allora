@@ -1,0 +1,162 @@
+/* src/components/Navbar.css */
+
+.allora-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(16px, 4vw, 72px);
+  height: 84px;
+  background: rgba(247, 250, 255, 0.85);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 10px 45px rgba(5, 26, 52, 0.08);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.allora-nav-left,
+.allora-nav-center,
+.allora-nav-right {
+  display: flex;
+  align-items: center;
+}
+
+.allora-nav-center {
+  flex: 1;
+  justify-content: center;
+  padding: 0 24px;
+}
+
+.allora-nav-right {
+  gap: 14px;
+}
+
+.allora-logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.allora-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(60, 116, 255, 0.12), rgba(255, 255, 255, 0.8));
+  display: grid;
+  place-items: center;
+  box-shadow: 0 12px 24px rgba(60, 116, 255, 0.25);
+}
+
+.allora-logo svg {
+  width: 28px;
+  height: 28px;
+}
+
+.allora-wordmark {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: #0f1f3f;
+}
+
+.allora-search {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 540px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(60, 116, 255, 0.2);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 14px 28px rgba(5, 26, 52, 0.08);
+}
+
+.allora-search-icon {
+  margin-right: 10px;
+  font-size: 16px;
+  color: #436ab4;
+}
+
+.allora-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  font-size: 0.95rem;
+  color: #0f1f3f;
+}
+
+.allora-search input::placeholder {
+  color: #6b7a94;
+}
+
+.allora-link-btn {
+  background: transparent;
+  border: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #1e2b4f;
+  cursor: pointer;
+  padding: 6px 4px;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.allora-link-btn:hover {
+  color: #3c74ff;
+  transform: translateY(-1px);
+}
+
+.allora-outline-btn {
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(60, 116, 255, 0.3);
+  background: transparent;
+  font-size: 0.92rem;
+  color: #3c74ff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.allora-outline-btn:hover {
+  background: rgba(60, 116, 255, 0.08);
+}
+
+.allora-primary-btn {
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #3c74ff, #7ab3ff);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 16px 30px rgba(60, 116, 255, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.allora-primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(60, 116, 255, 0.45);
+}
+
+@media (max-width: 900px) {
+  .allora-navbar {
+    flex-direction: column;
+    height: auto;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .allora-nav-center {
+    order: 3;
+    width: 100%;
+    padding: 0;
+  }
+
+  .allora-nav-right {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
