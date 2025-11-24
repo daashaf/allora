@@ -9,7 +9,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { db, isFirebaseConfigured } from "../firebase";
+import { db, ensureFirebaseAuth, isFirebaseConfigured } from "../firebase";
 import { formatSnapshotTimestamp } from "../utils/firestoreHelpers";
 
 export default function ManagerApprovals() {
@@ -69,8 +69,20 @@ export default function ManagerApprovals() {
     });
   }, [query, status, requests]);
 
+  const ensureAuth = async () => {
+    const user = await ensureFirebaseAuth();
+    if (!user) {
+      alert(
+        "Firebase authentication is not available. Enable anonymous auth or provide service credentials."
+      );
+      return false;
+    }
+    return true;
+  };
+
   const handleApprove = async (request) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await updateDoc(doc(db, "ManagerRequests", request.id), {
         status: "Approved",
@@ -78,12 +90,17 @@ export default function ManagerApprovals() {
       });
     } catch (error) {
       console.error("[Firebase] Failed to approve request", request.id, error);
-      alert("Unable to approve request. Please try again.");
+      const message =
+        error?.code === "permission-denied"
+          ? "Permission denied. Check Firebase rules for updating manager requests."
+          : "Unable to approve request. Please try again.";
+      alert(message);
     }
   };
 
   const handleReject = async (request) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await updateDoc(doc(db, "ManagerRequests", request.id), {
         status: "Rejected",
@@ -91,7 +108,11 @@ export default function ManagerApprovals() {
       });
     } catch (error) {
       console.error("[Firebase] Failed to reject request", request.id, error);
-      alert("Unable to reject request. Please try again.");
+      const message =
+        error?.code === "permission-denied"
+          ? "Permission denied. Check Firebase rules for updating manager requests."
+          : "Unable to reject request. Please try again.";
+      alert(message);
     }
   };
 
@@ -100,6 +121,7 @@ export default function ManagerApprovals() {
 
   const addRequest = async () => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     const name = window.prompt("Applicant name?");
     if (!name) return;
     const email = window.prompt("Email?");
@@ -115,7 +137,11 @@ export default function ManagerApprovals() {
       });
     } catch (error) {
       console.error("[Firebase] Failed to add manager request", error);
-      alert("Unable to add request. Please try again.");
+      const message =
+        error?.code === "permission-denied"
+          ? "Permission denied. Check Firebase rules or enable anonymous auth to add requests."
+          : "Unable to add request. Please try again.";
+      alert(message);
     }
   };
 

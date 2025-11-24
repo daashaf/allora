@@ -10,7 +10,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { db, isFirebaseConfigured } from "../firebase";
+import { db, ensureFirebaseAuth, isFirebaseConfigured } from "../firebase";
 import { formatSnapshotTimestamp } from "../utils/firestoreHelpers";
 
 export default function ManageUsers() {
@@ -20,6 +20,11 @@ export default function ManageUsers() {
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("All");
   const [status, setStatus] = useState("All");
+  const blankForm = { name: "", email: "", role: "Customer", status: "Active" };
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [formData, setFormData] = useState(blankForm);
+  const [viewUser, setViewUser] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!db) {
@@ -78,30 +83,58 @@ export default function ManageUsers() {
     setStatus("All");
   };
 
-  const addUser = async () => {
-    if (!db) return;
-    const name = window.prompt("User name?");
-    if (!name) return;
-    const email = window.prompt("Email?");
-    if (!email) return;
-    const roleValue = window.prompt("Role? (Customer, Customer Support, Service Provider)", "Customer");
-    if (!roleValue) return;
+  const ensureAuth = async () => {
+    const user = await ensureFirebaseAuth();
+    if (!user) {
+      alert(
+        "Firebase authentication is not available. Enable anonymous auth or provide service credentials."
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const openAddModal = () => {
+    setFormData(blankForm);
+    setShowAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setFormData(blankForm);
+    setSubmitting(false);
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    if (!db || submitting) return;
+    if (!(await ensureAuth())) return;
+    setSubmitting(true);
     try {
       await addDoc(collection(db, "Customer"), {
-        name,
-        email,
-        role: roleValue,
-        status: "Active",
+        ...formData,
         joinedAt: serverTimestamp(),
       });
+      closeAddModal();
     } catch (error) {
       console.error("[Firebase] Failed to add user", error);
-      alert("Unable to add user. Please try again.");
+      const message =
+        error?.code === "permission-denied"
+          ? "Firebase rejected this write (Missing or insufficient permissions). Check Firestore rules or enable anonymous auth."
+          : "Unable to add user. Please try again.";
+      alert(message);
+      setSubmitting(false);
     }
   };
 
   const toggleUserStatus = async (id) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     const target = users.find((u) => u.id === id);
     if (!target) return;
     const nextStatus = target.status === "Suspended" ? "Active" : "Suspended";
@@ -109,18 +142,27 @@ export default function ManageUsers() {
       await updateDoc(doc(db, "Customer", id), { status: nextStatus });
     } catch (error) {
       console.error("[Firebase] Failed to update user", id, error);
-      alert("Unable to update status. Please try again.");
+      const message =
+        error?.code === "permission-denied"
+          ? "Permission denied. Ensure Firebase allows updates for this user."
+          : "Unable to update status. Please try again.";
+      alert(message);
     }
   };
 
   const deleteUser = async (id) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     if (!window.confirm("Remove this user permanently?")) return;
     try {
       await deleteDoc(doc(db, "Customer", id));
     } catch (error) {
       console.error("[Firebase] Failed to delete user", id, error);
-      alert("Unable to delete user. Please try again.");
+      const message =
+        error?.code === "permission-denied"
+          ? "Permission denied. Check Firestore rules for delete access."
+          : "Unable to delete user. Please try again.";
+      alert(message);
     }
   };
 
@@ -130,7 +172,7 @@ export default function ManageUsers() {
         <h1 className="title">Manage Users</h1>
         <div className="header-actions">
           <button className="action-btn" onClick={() => navigate("/admin/dashboard")}>Back to Dashboard</button>
-          <button className="action-btn primary" onClick={addUser} disabled={!isFirebaseConfigured}>
+          <button className="action-btn primary" onClick={openAddModal} disabled={!isFirebaseConfigured}>
             Add User
           </button>
         </div>
@@ -197,7 +239,7 @@ export default function ManageUsers() {
                   </td>
                   <td>{u.joinedAt}</td>
                   <td className="table-actions">
-                    <button className="action-btn" onClick={() => alert(`Viewing ${u.name}`)}>View</button>
+                    <button className="action-btn" onClick={() => setViewUser(u)}>View</button>
                     <button className="action-btn" onClick={() => toggleUserStatus(u.id)}>
                       {u.status === "Suspended" ? "Activate" : "Suspend"}
                     </button>
@@ -209,6 +251,100 @@ export default function ManageUsers() {
           </tbody>
         </table>
       </div>
+
+      {showAddModal && (
+        <div className="modal-backdrop" onClick={closeAddModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3>Add User</h3>
+            <form className="modal-form" onSubmit={handleAddUser}>
+              <div className="form-field">
+                <label htmlFor="name">Full Name</label>
+                <input
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleFormChange}
+                  placeholder="Jane Doe"
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="email">Email</label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleFormChange}
+                  placeholder="jane@example.com"
+                  required
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-field">
+                  <label htmlFor="role">Role</label>
+                  <select id="role" name="role" value={formData.role} onChange={handleFormChange}>
+                    <option value="Customer">Customer</option>
+                    <option value="Customer Support">Customer Support</option>
+                    <option value="Service Provider">Service Provider</option>
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label htmlFor="status">Status</label>
+                  <select id="status" name="status" value={formData.status} onChange={handleFormChange}>
+                    <option value="Active">Active</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Suspended">Suspended</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button className="action-btn" type="button" onClick={closeAddModal} disabled={submitting}>
+                  Cancel
+                </button>
+                <button
+                  className="action-btn primary"
+                  type="submit"
+                  disabled={!formData.name.trim() || !formData.email.trim() || submitting}
+                >
+                  {submitting ? "Saving..." : "Save User"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {viewUser && (
+        <div className="modal-backdrop" onClick={() => setViewUser(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3>User Details</h3>
+            <div className="view-field">
+              <strong>Name:</strong> <span>{viewUser.name}</span>
+            </div>
+            <div className="view-field">
+              <strong>Email:</strong> <span>{viewUser.email}</span>
+            </div>
+            <div className="view-field">
+              <strong>Role:</strong> <span>{viewUser.role}</span>
+            </div>
+            <div className="view-field">
+              <strong>Status:</strong> <span>{viewUser.status}</span>
+            </div>
+            <div className="view-field">
+              <strong>Joined:</strong> <span>{viewUser.joinedAt}</span>
+            </div>
+            <div className="modal-actions">
+              <button className="action-btn" onClick={() => setViewUser(null)}>
+                Close
+              </button>
+              <button className="action-btn primary" onClick={() => setViewUser(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

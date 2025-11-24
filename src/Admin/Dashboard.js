@@ -11,18 +11,9 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, ensureFirebaseAuth } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import "./dashboard.css";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import { formatSnapshotTimestamp } from "../utils/firestoreHelpers";
 
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("Dashboard");
@@ -74,13 +65,20 @@ export default function AdminDashboard() {
     ],
   };
 
-  const data = [
-    { name: "Jan", BestImpression: 10, Stability: 20 },
-    { name: "Feb", BestImpression: 25, Stability: 22 },
-    { name: "Mar", BestImpression: 30, Stability: 28 },
-    { name: "Apr", BestImpression: 45, Stability: 40 },
-    { name: "May", BestImpression: 50, Stability: 55 },
-  ];
+  const formatSnapshotTimestamp = (value, fallback = "") => {
+    if (!value) {
+      return { display: fallback, order: 0 };
+    }
+    if (typeof value?.toMillis === "function") {
+      const dateValue = value.toDate();
+      return { display: dateValue.toLocaleString(), order: value.toMillis() };
+    }
+    const parsed = Date.parse(value);
+    return {
+      display: typeof value === "string" ? value : fallback,
+      order: Number.isNaN(parsed) ? 0 : parsed,
+    };
+  };
 
 const defaultSettings = {
   siteName: "Allora Service Hub",
@@ -100,6 +98,17 @@ const getBadgeClass = (value, fallback = "unknown") => {
   if (typeof value !== "string") return fallback;
   const trimmed = value.trim();
   return trimmed ? trimmed.toLowerCase() : fallback;
+};
+
+const ensureAuth = async () => {
+  const user = await ensureFirebaseAuth();
+  if (!user) {
+    alert(
+      "Firebase authentication is not available. Enable anonymous auth or provide service credentials."
+    );
+    return false;
+  }
+  return true;
 };
 
   // User Management data
@@ -133,6 +142,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const updateServiceStatus = async (serviceId, status) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await updateDoc(doc(db, "Services", serviceId), {
         status,
@@ -153,6 +163,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const deleteService = async (serviceId) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     if (!window.confirm("Delete this service permanently?")) return;
     try {
       await deleteDoc(doc(db, "Services", serviceId));
@@ -193,6 +204,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const addCategory = async () => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     const name = window.prompt("New category name?");
     if (!name) return;
     try {
@@ -210,6 +222,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const toggleCategoryVisibility = async (id) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     const target = categories.find((c) => c.id === id);
     if (!target) return;
     try {
@@ -224,6 +237,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const deleteCategory = async (id) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await deleteDoc(doc(db, "Category", id));
     } catch (error) {
@@ -256,6 +270,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const addCategoryService = async () => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     const name = window.prompt("Service name?");
     if (!name) return;
     const category = window.prompt("Category?");
@@ -276,6 +291,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const toggleCategoryService = async (id) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     const serviceRecord = categoryServices.find((s) => s.id === id);
     if (!serviceRecord) return;
     const nextStatus = serviceRecord.status === "Suspended" ? "Active" : "Suspended";
@@ -289,6 +305,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const deleteCategoryService = async (id) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await deleteDoc(doc(db, SERVICE_CATEGORY_COLLECTION, id));
     } catch (error) {
@@ -335,6 +352,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const updateIssueStatus = async (id, status) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await updateDoc(doc(db, "tickets", id), { status });
     } catch (error) {
@@ -376,6 +394,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const addRole = async () => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     const name = window.prompt("New role name?");
     if (!name) return;
     try {
@@ -393,6 +412,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const deleteRole = async (id) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await deleteDoc(doc(db, "Roles", id));
     } catch (error) {
@@ -403,6 +423,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const toggleRolePerm = async (id, key) => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     const role = roles.find((r) => r.id === id);
     if (!role) return;
     const next = new Set(role.perms);
@@ -427,6 +448,51 @@ const getBadgeClass = (value, fallback = "unknown") => {
     message: "",
   });
   const [notifications, setNotifications] = useState([]);
+
+  const summaryCards = useMemo(() => {
+    const serviceProviders = customers.filter((u) => u.role === "Service Provider").length;
+    const supportAgents = customers.filter((u) => u.role === "Customer Support").length;
+    const openIssues = issues.filter((issue) => issue.status === "Open").length;
+    const pendingListings = listings.filter(
+      (listing) => (listing.status || "").toLowerCase() === "pending"
+    ).length;
+    return [
+      {
+        key: "customers",
+        label: "Customers",
+        value: customers.length,
+        detail: `${serviceProviders} service providers`,
+      },
+      {
+        key: "support",
+        label: "Support Team",
+        value: supportAgents,
+        detail: `${Math.max(customers.length - supportAgents, 0)} other members`,
+      },
+      {
+        key: "services",
+        label: "Services",
+        value: services.length,
+        detail: `${pendingListings} awaiting review`,
+      },
+      {
+        key: "tickets",
+        label: "Open Tickets",
+        value: openIssues,
+        detail: `${issues.length} total`,
+      },
+      {
+        key: "notifications",
+        label: "Notifications Sent",
+        value: notifications.length,
+        detail: `${roles.length} roles configured`,
+      },
+    ];
+  }, [customers, services, listings, issues, notifications, roles]);
+
+  const recentNotifications = useMemo(() => notifications.slice(0, 3), [notifications]);
+  const recentIssues = useMemo(() => issues.slice(0, 3), [issues]);
+  const recentServices = useMemo(() => services.slice(0, 3), [services]);
 
   useEffect(() => {
     if (!db) return undefined;
@@ -453,16 +519,25 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const sendNotification = async () => {
     if (!db) return;
-    if (!compose.subject.trim() || !compose.message.trim()) {
+    if (!(await ensureAuth())) return;
+    const subject = compose.subject.trim();
+    const message = compose.message.trim();
+    if (!subject || !message) {
       alert("Please enter subject and message");
       return;
     }
     try {
+      console.info("[Notification] sending", {
+        audience: compose.audience,
+        channel: compose.channel,
+        subject,
+        message,
+      });
       await addDoc(collection(db, "Notification"), {
         audience: compose.audience,
         channel: compose.channel,
-        subject: compose.subject,
-        message: compose.message,
+        subject,
+        message,
         status: "Sent",
         sentAt: serverTimestamp(),
       });
@@ -470,7 +545,11 @@ const getBadgeClass = (value, fallback = "unknown") => {
       alert("Notification sent");
     } catch (error) {
       console.error("[Firebase] Failed to send notification", error);
-      alert("Unable to send notification. Please try again.");
+      alert(
+        `Unable to send notification. ${error?.code || "Unknown error"} ${
+          error?.message ? "- " + error.message : ""
+        }`
+      );
     }
   };
 
@@ -489,6 +568,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const saveSettings = async () => {
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await setDoc(doc(db, "Admin", "siteSettings"), settings, { merge: true });
       alert("Settings saved");
@@ -501,6 +581,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const resetSettings = async () => {
     setSettings(defaultSettings);
     if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
       await setDoc(doc(db, "Admin", "siteSettings"), defaultSettings);
     } catch (error) {
@@ -585,41 +666,68 @@ const getBadgeClass = (value, fallback = "unknown") => {
           <section className="dashboard">
             <h1 className="title">Dashboard</h1>
 
-            {/* Chart */}
-            <div className="chart-box">
-              <h3>Overview users</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={data}>
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="BestImpression" stroke="#0d6efd" strokeWidth={2} />
-                  <Line type="monotone" dataKey="Stability" stroke="#06b6d4" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="cards">
+              {summaryCards.map((card) => (
+                <div key={card.key} className="card commission">
+                  <h4>{card.label}</h4>
+                  <h2>{card.value}</h2>
+                  {card.detail && <p>{card.detail}</p>}
+                </div>
+              ))}
             </div>
 
-            {/* Cards Section */}
             <div className="cards">
-              <div className="card commission">
-                <h4>Commission</h4>
-                <h2>27,500</h2>
-                <p>Up to 10% from last week</p>
+              <div className="card latest">
+                <h4>Recent Notifications</h4>
+                <div className="activity">
+                  {recentNotifications.length === 0 ? (
+                    <p>No notifications sent.</p>
+                  ) : (
+                    recentNotifications.map((notification) => (
+                      <p key={notification.id}>
+                        <strong>{notification.subject || "Untitled notification"}</strong>
+                        <br />
+                        <span>
+                          {notification.audience || "All"} • {notification.sentAt || "Queued"}
+                        </span>
+                      </p>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div className="card latest">
-                <h4>Latest Activity</h4>
+                <h4>Latest Tickets</h4>
                 <div className="activity">
-                  <p>Conversation response - 2 hrs ago</p>
-                  <p>Dashboard setup - 5 hrs ago</p>
-                  <p>Review update - 8 hrs ago</p>
+                  {recentIssues.length === 0 ? (
+                    <p>No tickets available.</p>
+                  ) : (
+                    recentIssues.map((ticket) => (
+                      <p key={ticket.id}>
+                        <strong>{ticket.subject}</strong>
+                        <br />
+                        <span>
+                          {ticket.customer} • {ticket.createdAt || "Pending"}
+                        </span>
+                      </p>
+                    ))
+                  )}
                 </div>
               </div>
 
               <div className="card messages">
-                <h4>Messages</h4>
-                <p>Francisco Avalos replied to your request.</p>
-                <button>Reply Messages</button>
+                <h4>Service Updates</h4>
+                <div className="activity">
+                  {recentServices.length === 0 ? (
+                    <p>No services published yet.</p>
+                  ) : (
+                    recentServices.map((service) => (
+                      <p key={service.id}>
+                        {service.service || "Service"} • {service.status || "Pending"}
+                      </p>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </section>
