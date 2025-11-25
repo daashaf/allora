@@ -14,12 +14,15 @@ import { db, ensureFirebaseAuth, isFirebaseConfigured } from "../firebase";
 import { formatSnapshotTimestamp } from "../utils/firestoreHelpers";
 
 export default function ManageUsers() {
+  const USER_COLLECTION = "users";
   const navigate = useNavigate();
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("All");
   const [status, setStatus] = useState("All");
+
   const blankForm = { name: "", email: "", role: "Customer", status: "Active" };
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState(blankForm);
@@ -31,15 +34,17 @@ export default function ManageUsers() {
       setLoading(false);
       return undefined;
     }
+
     const unsub = onSnapshot(
-      collection(db, "Customer"),
+      collection(db, USER_COLLECTION),
       (snapshot) => {
         const docs = snapshot.docs
           .map((docSnap) => {
             const data = docSnap.data();
+            const joinedRaw = data.joinedAt || data.Joined || data.joined || null;
             const { display, order } = formatSnapshotTimestamp(
-              data.joinedAt,
-              data.joinedAt || new Date().toISOString()
+              joinedRaw,
+              joinedRaw || new Date().toISOString()
             );
             return {
               id: docSnap.id,
@@ -56,6 +61,7 @@ export default function ManageUsers() {
             ...rest,
             joinedAt: joinedAtDisplay,
           }));
+
         setUsers(docs);
         setLoading(false);
       },
@@ -65,17 +71,21 @@ export default function ManageUsers() {
         setLoading(false);
       }
     );
+
     return () => unsub();
-  }, [db]);
+  }, []);
 
   const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+
     return users.filter((u) => {
-      const matchesQuery = `${u.name} ${u.email}`.toLowerCase().includes(query.toLowerCase());
+      const matchesQuery =
+        !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
       const matchesRole = role === "All" || u.role === role;
       const matchesStatus = status === "All" || u.status === status;
       return matchesQuery && matchesRole && matchesStatus;
     });
-  }, [query, role, status, users]);
+  }, [users, query, role, status]);
 
   const clearFilters = () => {
     setQuery("");
@@ -114,9 +124,10 @@ export default function ManageUsers() {
     e.preventDefault();
     if (!db || submitting) return;
     if (!(await ensureAuth())) return;
+
     setSubmitting(true);
     try {
-      await addDoc(collection(db, "Customer"), {
+      await addDoc(collection(db, USER_COLLECTION), {
         ...formData,
         joinedAt: serverTimestamp(),
       });
@@ -135,11 +146,14 @@ export default function ManageUsers() {
   const toggleUserStatus = async (id) => {
     if (!db) return;
     if (!(await ensureAuth())) return;
+
     const target = users.find((u) => u.id === id);
     if (!target) return;
+
     const nextStatus = target.status === "Suspended" ? "Active" : "Suspended";
+
     try {
-      await updateDoc(doc(db, "Customer", id), { status: nextStatus });
+      await updateDoc(doc(db, USER_COLLECTION, id), { status: nextStatus });
     } catch (error) {
       console.error("[Firebase] Failed to update user", id, error);
       const message =
@@ -154,8 +168,9 @@ export default function ManageUsers() {
     if (!db) return;
     if (!(await ensureAuth())) return;
     if (!window.confirm("Remove this user permanently?")) return;
+
     try {
-      await deleteDoc(doc(db, "Customer", id));
+      await deleteDoc(doc(db, USER_COLLECTION, id));
     } catch (error) {
       console.error("[Firebase] Failed to delete user", id, error);
       const message =
@@ -171,8 +186,14 @@ export default function ManageUsers() {
       <div className="page-header">
         <h1 className="title">Manage Users</h1>
         <div className="header-actions">
-          <button className="action-btn" onClick={() => navigate("/admin/dashboard")}>Back to Dashboard</button>
-          <button className="action-btn primary" onClick={openAddModal} disabled={!isFirebaseConfigured}>
+          <button className="action-btn" onClick={() => navigate("/admin/dashboard")}>
+            Back to Dashboard
+          </button>
+          <button
+            className="action-btn primary"
+            onClick={openAddModal}
+            disabled={!isFirebaseConfigured}
+          >
             Add User
           </button>
         </div>
@@ -204,7 +225,9 @@ export default function ManageUsers() {
           <option>Suspended</option>
           <option>Pending</option>
         </select>
-        <button className="action-btn" onClick={clearFilters}>Clear</button>
+        <button className="action-btn" onClick={clearFilters}>
+          Clear
+        </button>
       </div>
 
       <div className="table-wrapper">
@@ -222,11 +245,15 @@ export default function ManageUsers() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="6" style={{ textAlign: "center", padding: 16 }}>Loading users...</td>
+                <td colSpan="6" style={{ textAlign: "center", padding: 16 }}>
+                  Loading users...
+                </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ textAlign: "center", padding: 16 }}>No users match your filters.</td>
+                <td colSpan="6" style={{ textAlign: "center", padding: 16 }}>
+                  No users match your filters.
+                </td>
               </tr>
             ) : (
               filtered.map((u) => (
@@ -239,11 +266,15 @@ export default function ManageUsers() {
                   </td>
                   <td>{u.joinedAt}</td>
                   <td className="table-actions">
-                    <button className="action-btn" onClick={() => setViewUser(u)}>View</button>
+                    <button className="action-btn" onClick={() => setViewUser(u)}>
+                      View
+                    </button>
                     <button className="action-btn" onClick={() => toggleUserStatus(u.id)}>
                       {u.status === "Suspended" ? "Activate" : "Suspend"}
                     </button>
-                    <button className="action-btn danger" onClick={() => deleteUser(u.id)}>Delete</button>
+                    <button className="action-btn danger" onClick={() => deleteUser(u.id)}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))
@@ -255,59 +286,55 @@ export default function ManageUsers() {
       {showAddModal && (
         <div className="modal-backdrop" onClick={closeAddModal}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <h3>Add User</h3>
-            <form className="modal-form" onSubmit={handleAddUser}>
-              <div className="form-field">
-                <label htmlFor="name">Full Name</label>
+            <div className="modal-header">
+              <h2>Add New User</h2>
+              <button className="close-btn" onClick={closeAddModal}>
+                x
+              </button>
+            </div>
+            <form onSubmit={handleAddUser}>
+              <div className="form-group">
+                <label>Name</label>
                 <input
-                  id="name"
+                  type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleFormChange}
-                  placeholder="Jane Doe"
                   required
                 />
               </div>
-              <div className="form-field">
-                <label htmlFor="email">Email</label>
+              <div className="form-group">
+                <label>Email</label>
                 <input
-                  id="email"
-                  name="email"
                   type="email"
+                  name="email"
                   value={formData.email}
                   onChange={handleFormChange}
-                  placeholder="jane@example.com"
                   required
                 />
               </div>
-              <div className="form-row">
-                <div className="form-field">
-                  <label htmlFor="role">Role</label>
-                  <select id="role" name="role" value={formData.role} onChange={handleFormChange}>
-                    <option value="Customer">Customer</option>
-                    <option value="Customer Support">Customer Support</option>
-                    <option value="Service Provider">Service Provider</option>
-                  </select>
-                </div>
-                <div className="form-field">
-                  <label htmlFor="status">Status</label>
-                  <select id="status" name="status" value={formData.status} onChange={handleFormChange}>
-                    <option value="Active">Active</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Suspended">Suspended</option>
-                  </select>
-                </div>
+              <div className="form-group">
+                <label>Role</label>
+                <select name="role" value={formData.role} onChange={handleFormChange}>
+                  <option value="Customer">Customer</option>
+                  <option value="Customer Support">Customer Support</option>
+                  <option value="Service Provider">Service Provider</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Status</label>
+                <select name="status" value={formData.status} onChange={handleFormChange}>
+                  <option value="Active">Active</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Suspended">Suspended</option>
+                </select>
               </div>
               <div className="modal-actions">
-                <button className="action-btn" type="button" onClick={closeAddModal} disabled={submitting}>
+                <button type="button" className="action-btn" onClick={closeAddModal} disabled={submitting}>
                   Cancel
                 </button>
-                <button
-                  className="action-btn primary"
-                  type="submit"
-                  disabled={!formData.name.trim() || !formData.email.trim() || submitting}
-                >
-                  {submitting ? "Saving..." : "Save User"}
+                <button type="submit" className="action-btn primary" disabled={submitting}>
+                  {submitting ? "Adding..." : "Add User"}
                 </button>
               </div>
             </form>
@@ -318,28 +345,33 @@ export default function ManageUsers() {
       {viewUser && (
         <div className="modal-backdrop" onClick={() => setViewUser(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <h3>User Details</h3>
-            <div className="view-field">
-              <strong>Name:</strong> <span>{viewUser.name}</span>
+            <div className="modal-header">
+              <h2>User Details</h2>
+              <button className="close-btn" onClick={() => setViewUser(null)}>
+                x
+              </button>
             </div>
-            <div className="view-field">
-              <strong>Email:</strong> <span>{viewUser.email}</span>
-            </div>
-            <div className="view-field">
-              <strong>Role:</strong> <span>{viewUser.role}</span>
-            </div>
-            <div className="view-field">
-              <strong>Status:</strong> <span>{viewUser.status}</span>
-            </div>
-            <div className="view-field">
-              <strong>Joined:</strong> <span>{viewUser.joinedAt}</span>
+            <div className="user-details">
+              <div className="detail-row">
+                <strong>Name:</strong> {viewUser.name}
+              </div>
+              <div className="detail-row">
+                <strong>Email:</strong> {viewUser.email}
+              </div>
+              <div className="detail-row">
+                <strong>Role:</strong> {viewUser.role}
+              </div>
+              <div className="detail-row">
+                <strong>Status:</strong>{" "}
+                <span className={`badge ${viewUser.status.toLowerCase()}`}>{viewUser.status}</span>
+              </div>
+              <div className="detail-row">
+                <strong>Joined:</strong> {viewUser.joinedAt}
+              </div>
             </div>
             <div className="modal-actions">
               <button className="action-btn" onClick={() => setViewUser(null)}>
                 Close
-              </button>
-              <button className="action-btn primary" onClick={() => setViewUser(null)}>
-                Done
               </button>
             </div>
           </div>

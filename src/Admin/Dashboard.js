@@ -15,6 +15,14 @@ import { db, ensureFirebaseAuth } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import "./dashboard.css";
 
+const defaultSettings = {
+  siteName: "Allora Service Hub",
+  maintenance: false,
+  defaultRole: "Customer",
+  emailNotifications: true,
+  itemsPerPage: 10,
+};
+
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("Dashboard");
   const [userMgmtTab, setUserMgmtTab] = useState("Customer");
@@ -80,14 +88,6 @@ export default function AdminDashboard() {
     };
   };
 
-const defaultSettings = {
-  siteName: "Allora Service Hub",
-  maintenance: false,
-  defaultRole: "Customer",
-  emailNotifications: true,
-  itemsPerPage: 10,
-};
-
 const getBadgeLabel = (value, fallback = "Unknown") => {
   if (typeof value !== "string") return fallback;
   const trimmed = value.trim();
@@ -116,10 +116,22 @@ const ensureAuth = async () => {
 
   useEffect(() => {
     if (!db) return undefined;
-    return onSnapshot(collection(db, "Customer"), (snapshot) => {
-      setCustomers(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+    return onSnapshot(collection(db, "users"), (snapshot) => {
+      setCustomers(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            name: data.name || data.displayName || "Unnamed",
+            email: data.email || "",
+            role: data.role || data.userType || "Customer",
+            status: data.status || data.accountStatus || "Active",
+            joinedAt: data.joinedAt || data.Joined || data.joined || "",
+          };
+        })
+      );
     });
-  }, [db]);
+  }, []);
 
   const visibleRows = useMemo(
     () => customers.filter((u) => u.role === userMgmtTab),
@@ -138,7 +150,7 @@ const ensureAuth = async () => {
       setServices(docs);
       setListings(docs);
     });
-  }, [db]);
+  }, []);
 
   const updateServiceStatus = async (serviceId, status) => {
     if (!db) return;
@@ -200,7 +212,7 @@ const ensureAuth = async () => {
         })
       );
     });
-  }, [db]);
+  }, []);
 
   const addCategory = async () => {
     if (!db) return;
@@ -266,7 +278,7 @@ const ensureAuth = async () => {
         })
       );
     });
-  }, [db]);
+  }, []);
 
   const addCategoryService = async () => {
     if (!db) return;
@@ -343,7 +355,7 @@ const ensureAuth = async () => {
         .map(({ _order, ...rest }) => rest);
       setIssues(docs);
     });
-  }, [db]);
+  }, []);
 
   const filteredIssues = useMemo(
     () => issues.filter((i) => (issueFilter === "All" ? true : i.status === issueFilter)),
@@ -390,7 +402,7 @@ const ensureAuth = async () => {
         })
       );
     });
-  }, [db]);
+  }, []);
 
   const addRole = async () => {
     if (!db) return;
@@ -515,7 +527,7 @@ const ensureAuth = async () => {
         .map(({ _order, ...rest }) => rest);
       setNotifications(docs);
     });
-  }, [db]);
+  }, []);
 
   const sendNotification = async () => {
     if (!db) return;
@@ -564,7 +576,7 @@ const ensureAuth = async () => {
         setSettings({ ...defaultSettings, ...snapshot.data() });
       }
     });
-  }, [db]);
+  }, []);
 
   const saveSettings = async () => {
     if (!db) return;

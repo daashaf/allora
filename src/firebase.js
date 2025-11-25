@@ -16,14 +16,14 @@ const envConfig = {
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
 };
 
-// Optional fallback values for local development
+// Optional fallback values for local development (match the real project, not the typo)
 const fallbackConfig = {
-   apiKey: "AIzaSyA1gGqKyv1Lo_wH5SNsVqPB92SW1GgGPa8",
-  authDomain: "allora-serice-hub.firebaseapp.com",
-  projectId: "allora-serice-hub",
-  storageBucket: "allora-serice-hub.firebasestorage.app",
+  apiKey: "AIzaSyA1gGqKyv1Lo_wH5SNsVqPB92SW1GgGPa8",
+  authDomain: "allora-service-hub.firebaseapp.com",
+  projectId: "allora-service-hub",
+  storageBucket: "allora-service-hub.appspot.com",
   messagingSenderId: "47437060835",
-  appId: "1:47437060835:web:0c6d304f8f3953896c43d6"
+  appId: "1:47437060835:web:768f0a66e5d142776c43d6",
 };
 
 const firebaseConfig = Object.fromEntries(

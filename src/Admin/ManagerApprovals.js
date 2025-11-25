@@ -59,7 +59,7 @@ export default function ManagerApprovals() {
       }
     );
     return () => unsub();
-  }, [db]);
+  }, []);
 
   const filtered = useMemo(() => {
     return requests.filter((r) => {
