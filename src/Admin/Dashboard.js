@@ -120,23 +120,33 @@ const ensureAuth = async () => {
       setCustomers(
         snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
+          const role = data.role || data.Role || data.userType || "Customer";
+          const status = data.status || data.Status || data.accountStatus || "Active";
+          const joinedRaw = data.joinedAt || data.Joined || data.joined || "";
+          const { display } = formatSnapshotTimestamp(
+            joinedRaw,
+            joinedRaw || new Date().toISOString().slice(0, 10)
+          );
           return {
             id: docSnap.id,
-            name: data.name || data.displayName || "Unnamed",
-            email: data.email || "",
-            role: data.role || data.userType || "Customer",
-            status: data.status || data.accountStatus || "Active",
-            joinedAt: data.joinedAt || data.Joined || data.joined || "",
+            name: data.name || data.Name || data.displayName || data.fullName || "Unnamed",
+            email: data.email || data.Email || data.emailAddress || "",
+            role,
+            status,
+            joinedAt: display,
           };
         })
       );
     });
   }, []);
 
-  const visibleRows = useMemo(
-    () => customers.filter((u) => u.role === userMgmtTab),
-    [customers, userMgmtTab]
-  );
+  const normalizeRole = (value) =>
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+
+  const visibleRows = useMemo(() => {
+    const target = normalizeRole(userMgmtTab);
+    return customers.filter((u) => normalizeRole(u.role) === target);
+  }, [customers, userMgmtTab]);
 
   // Service Management state + Firestore data
   const [services, setServices] = useState([]);

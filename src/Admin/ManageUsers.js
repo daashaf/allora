@@ -48,10 +48,10 @@ export default function ManageUsers() {
             );
             return {
               id: docSnap.id,
-              name: data.name || "Unnamed",
-              email: data.email || "",
-              role: data.role || "Customer",
-              status: data.status || "Active",
+              name: data.name || data.Name || data.displayName || data.fullName || "Unnamed",
+              email: data.email || data.Email || data.emailAddress || "",
+              role: data.role || data.Role || "Customer",
+              status: data.status || data.Status || "Active",
               joinedAtDisplay: display,
               _order: order,
             };
