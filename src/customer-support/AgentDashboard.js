@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 
 import {
@@ -215,7 +215,7 @@ function AgentDashboard() {
 
             {/*  FOOTER  */}
             <footer className="support-footer">
-                <p>© 2025 Allora Service Hub. All rights reserved.</p>
+                <p>(c) 2025 Allora Service Hub. All rights reserved.</p>
                 <div className="footer-social">
                     <p>To know more about our website, visit us on:</p>
                     <div className="social-icons">
@@ -240,3 +240,5 @@ function AgentDashboard() {
 }
 
 export default AgentDashboard;
+
+

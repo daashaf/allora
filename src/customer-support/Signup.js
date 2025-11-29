@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../firebase";
@@ -17,13 +17,13 @@ function Signup() {
         e.preventDefault();
         setErrors({});
 
-        // ✅ Validation
+        // Validation
         const newErrors = {};
         if (!name.trim()) newErrors.name = "Full name is required";
         if (!email.trim()) newErrors.email = "Email is required";
         if (!phone.trim()) newErrors.phone = "Phone number is required";
         else if (!/^[0-9]{8,15}$/.test(phone))
-            newErrors.phone = "Enter a valid phone number (8–15 digits)";
+            newErrors.phone = "Enter a valid phone number (8-15 digits)";
         if (!password.trim()) newErrors.password = "Password is required";
         else if (password.length < 6)
             newErrors.password = "Password must be at least 6 characters";
@@ -34,15 +34,16 @@ function Signup() {
         }
 
         try {
-            // ✅ Create user with Firebase Authentication
+            // Create user with Firebase Authentication
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
 
-            // ✅ Store user info in Firestore
+            // Store user info in Firestore
             await setDoc(doc(db, "users", user.uid), {
                 name,
-                email,
+                email: email.trim().toLowerCase(),
                 phone,
+                role: "Customer Support",
                 createdAt: new Date(),
             });
 
@@ -111,3 +112,5 @@ function Signup() {
 }
 
 export default Signup;
+
+

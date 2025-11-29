@@ -1,28 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import "../login.css";
 import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
+import { auth, db, ensureUserRole } from "../firebase";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
 
-const ROLE_OPTIONS = [
-  "Customer",
-  "Administrator",
-  "Customer Support",
-  "Service Provider",
-];
-
-const formatRoleHeading = (role) => {
-  if (!role) {
-    return "";
-  }
-
-  const article = /^[aeiou]/i.test(role) ? "AN" : "A";
-  return `LOGIN AS ${article} ${role.toUpperCase()}`;
-};
-
-export default function Login() {
+export default function Login({ defaultMode = "login" }) {
   const [isLoading, setIsLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -34,7 +21,6 @@ export default function Login() {
   const [resetMessage, setResetMessage] = useState("");
   const [resetError, setResetError] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
-  const [isSignup, setIsSignup] = useState(false);
   const [signupData, setSignupData] = useState({
     firstName: "",
     lastName: "",
@@ -46,11 +32,46 @@ export default function Login() {
   const [signupMessage, setSignupMessage] = useState("");
   const [signupError, setSignupError] = useState("");
   const [signupLoading, setSignupLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(ROLE_OPTIONS[0]);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const incomingRole = location.state?.role;
-  const roleHeading = formatRoleHeading(selectedRole);
+  const showSignupByDefault = defaultMode === "signup" || location.pathname === "/signup";
+  const [isSignup, setIsSignup] = useState(showSignupByDefault);
+
+  const routeToRoleHome = (role) => {
+    if (role === "Administrator") {
+      navigate("/admin/dashboard", { replace: true });
+      return;
+    }
+    if (role === "Customer Support") {
+      navigate("/support", { replace: true });
+      return;
+    }
+    navigate("/my-board", { replace: true });
+  };
+
+  const canAccessSupport = (role) =>
+    ["Customer", "Customer Support", "Administrator"].includes(role);
+
+  const getReturnPath = () => {
+    const fromState = location.state?.from;
+    if (!fromState) return null;
+    if (typeof fromState === "string") return fromState;
+    if (typeof fromState === "object" && fromState.pathname) return fromState.pathname;
+    return null;
+  };
+
+  const redirectToSupportIfRequested = (role) => {
+    const targetPath = getReturnPath();
+    if (targetPath && targetPath.startsWith("/support") && canAccessSupport(role)) {
+      navigate(targetPath, { replace: true });
+      return true;
+    }
+    return false;
+  };
 
   useEffect(() => {
     const finishLoading = () => setIsLoading(false);
@@ -80,14 +101,74 @@ export default function Login() {
   }, [isLoading]);
 
   useEffect(() => {
-    if (incomingRole && ROLE_OPTIONS.includes(incomingRole)) {
-      setSelectedRole(incomingRole);
-    }
-  }, [incomingRole]);
+    setIsSignup(showSignupByDefault);
+  }, [showSignupByDefault]);
 
-  const handleSubmit = (event) => {
+  const getUserRole = async (uid) => {
+    if (!db) return null;
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return data.role || data.Role || data.userType || null;
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    navigate("/dashboard");
+    setLoginError("");
+
+    if (!auth || !db) {
+      setLoginError("Firebase is not configured. Add your keys to .env to enable login.");
+      return;
+    }
+
+    if (!email.trim() || !password) {
+      setLoginError("Please enter your email and password.");
+      return;
+    }
+
+    try {
+      setLoginLoading(true);
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      await ensureUserRole(credential.user.uid, credential.user.email);
+      const role = await getUserRole(credential.user.uid);
+
+      if (redirectToSupportIfRequested(role)) {
+        return;
+      }
+
+      if (role === "Administrator") {
+        routeToRoleHome("Administrator");
+        return;
+      }
+
+      if (role === "Customer Support") {
+        routeToRoleHome("Customer Support");
+        return;
+      }
+
+      if (role === "Customer") {
+        routeToRoleHome("Customer");
+        return;
+      }
+
+      setLoginError("No role is assigned to this account. Please contact support.");
+      await signOut(auth);
+    } catch (error) {
+      if (error?.code === "auth/invalid-credential") {
+        setLoginError("Invalid email or password.");
+      } else if (error?.code === "auth/network-request-failed") {
+        setLoginError("Network error while signing in. Check your connection and try again.");
+      } else if (error?.code === "auth/too-many-requests") {
+        setLoginError("Too many attempts. Please wait a moment and try again.");
+      } else if (error?.code === "auth/user-disabled") {
+        setLoginError("This account is disabled. Contact support.");
+      } else {
+        console.warn("[Login] Sign-in failed:", error);
+        setLoginError(error?.message || "Unable to sign in right now. Please try again.");
+      }
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   const resetSignupState = () => {
@@ -122,11 +203,13 @@ export default function Login() {
 
   const openSignup = () => {
     setIsSignup(true);
+    navigate("/signup", { state: location.state });
     resetSignupState();
   };
 
   const closeSignup = () => {
     setIsSignup(false);
+    navigate("/login", { state: location.state });
     resetSignupState();
   };
 
@@ -273,6 +356,31 @@ export default function Login() {
     try {
       setSignupLoading(true);
 
+      // Create Firebase user
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          signupData.email.trim(),
+          signupData.password
+        );
+        const user = userCredential.user;
+
+        // Store user info in Firestore
+        const userDocRef = doc(db, "users", user.uid);
+        await setDoc(
+          userDocRef,
+          {
+            firstName: signupData.firstName,
+            lastName: signupData.lastName,
+            email: signupData.email.trim().toLowerCase(),
+            dob: signupData.dob,
+            region: signupData.region,
+            role: "Customer",
+            createdAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+      // Send welcome email via server
       const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: "POST",
         headers: {
@@ -283,15 +391,27 @@ export default function Login() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || "Unable to create account.");
+        throw new Error(data.message || "Welcome email could not be sent. Please try again.");
       }
 
-      setSignupMessage("Account created! Please check your email to verify.");
+      setSignupMessage(`Account created successfully! We've emailed ${signupData.email}. Redirecting...`);
       setTimeout(() => {
-        closeSignup();
-      }, 2000);
+        if (!redirectToSupportIfRequested("Customer")) {
+          routeToRoleHome("Customer");
+        }
+      }, 700);
     } catch (error) {
-      setSignupError(error.message || "Something went wrong. Please try again.");
+      if (error?.code === "auth/email-already-in-use") {
+        setSignupError("This email is already registered.");
+      } else if (error?.code === "auth/weak-password") {
+        setSignupError("Password is too weak. Please use a stronger password.");
+      } else if (error?.code === "auth/network-request-failed") {
+        setSignupError("Network error while creating the account. Check your connection or VPN/ad blocker and try again.");
+      } else if (error?.message?.includes("Failed to fetch")) {
+        setSignupError("Cannot reach the signup email service. Please start the server on the API URL shown in your .env (default http://localhost:4000).");
+      } else {
+        setSignupError(error.message || "Something went wrong. Please try again.");
+      }
     } finally {
       setSignupLoading(false);
     }
@@ -308,16 +428,17 @@ export default function Login() {
     "Napier",
     "Rotorua",
     "New Plymouth",
-    "Whangārei",
+    "Whangarei",
     "Nelson",
     "Invercargill",
     "Queenstown",
   ];
 
   const cardClassName = isSignup ? "card card--signup" : "card";
+  const pageClassName = isSignup ? "admin-login-page is-signup" : "admin-login-page";
 
   return (
-    <div className="admin-login-page">
+    <div className={pageClassName}>
       {isLoading && (
         <div className="page-loader" role="status" aria-live="polite">
           <InfinityLogo className="infinity-logo loader-logo" focusable="false" />
@@ -328,210 +449,259 @@ export default function Login() {
       <div className="floating-circle circle-top" aria-hidden="true" />
       <div className="floating-circle circle-bottom" aria-hidden="true" />
 
-      <header className="brand-wrap">
-        <h1 className="brand">ALLORA SERVICE HUB</h1>
-        <p className="role">{roleHeading}</p>
-      </header>
-
-      <section className={cardClassName}>
-        {isSignup ? (
-          <>
-            <h2 className="card-title">Create Account</h2>
-            <form className="login-form" onSubmit={handleSignupSubmit}>
-              <div className="signup-row">
-                <div className="field">
-                  <label className="label" htmlFor="signup-first-name">
-                    First Name
-                  </label>
-                  <input
-                    id="signup-first-name"
-                    name="firstName"
-                    type="text"
-                    className="input"
-                    placeholder="First Name"
-                    value={signupData.firstName}
-                    onChange={handleSignupChange}
-                    required
-                  />
-                </div>
-                <div className="field">
-                  <label className="label" htmlFor="signup-last-name">
-                    Last Name
-                  </label>
-                  <input
-                    id="signup-last-name"
-                    name="lastName"
-                    type="text"
-                    className="input"
-                    placeholder="Last Name"
-                    value={signupData.lastName}
-                    onChange={handleSignupChange}
-                    required
-                  />
+      <div className="login-shell">
+        <div className="login-panel">
+          <section className={cardClassName}>
+          {isSignup ? (
+            <>
+              <h2 className="card-title">Create Account</h2>
+              <div className="signup-header">
+                <span className="pill badge-soft">New workspace</span>
+                <p className="card-subtitle">
+                  Create your Allora account to manage bookings, support, and insights in one calm place.
+                </p>
+                <div className="signup-meta">
+                  <span className="meta-chip">Email verification</span>
+                  <span className="meta-chip">NZ region ready</span>
+                  <span className="meta-chip meta-chip--accent">Secure by design</span>
                 </div>
               </div>
-
-              <div className="field">
-                <label className="label" htmlFor="signup-dob">
-                  Date of Birth
-                </label>
-                <input
-                  id="signup-dob"
-                  name="dob"
-                  type="date"
-                  className="input"
-                  value={signupData.dob}
-                  onChange={handleSignupChange}
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="signup-region">
-                  Region (New Zealand)
-                </label>
-                <select
-                  id="signup-region"
-                  name="region"
-                  className="input"
-                  value={signupData.region}
-                  onChange={handleSignupChange}
-                  required
-                >
-                  <option value="">Select a city</option>
-                  {regions.map((region) => (
-                    <option key={region} value={region}>
-                      {region}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="signup-email">
-                  Email Address
-                </label>
-                <input
-                  id="signup-email"
-                  name="email"
-                  type="email"
-                  className="input"
-                  placeholder="Email Address"
-                  value={signupData.email}
-                  onChange={handleSignupChange}
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="signup-password">
-                  Password
-                </label>
-                <input
-                  id="signup-password"
-                  name="password"
-                  type="password"
-                  className="input"
-                  placeholder="Create a password"
-                  value={signupData.password}
-                  onChange={handleSignupChange}
-                  required
-                />
-              </div>
-
-              {signupMessage && (
-                <p className="reset-message success">{signupMessage}</p>
-              )}
-              {signupError && (
-                <p className="reset-message error">{signupError}</p>
-              )}
-
-              <button type="submit" className="btn" disabled={signupLoading}>
-                {signupLoading ? "Creating..." : "Create Account"}
-              </button>
-            </form>
-
-            <p className="hint">
-              Already have an account?{" "}
-              <button type="button" className="inline-link" onClick={closeSignup}>
-                Log in
-              </button>
-            </p>
-
-            <div className="card-logo" aria-hidden="true">
-              <InfinityLogo className="infinity-logo" focusable="false" />
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 className="card-title">Login</h2>
-
-            <form onSubmit={handleSubmit} className="login-form">
-              <div className="field">
-                <label className="label" htmlFor="login-email">
-                  Email Address
-                </label>
-                <input
-                  id="login-email"
-                  type="email"
-                  className="input"
-                  placeholder="Email Address"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="login-password">
-                  Password
-                </label>
-                <div className="password-row">
-                  <input
-                    id="login-password"
-                    type={showPassword ? "text" : "password"}
-                    className="input"
-                    placeholder="Password"
-                    autoComplete="current-password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="eye-btn"
-                    aria-label="Toggle password visibility"
-                    aria-pressed={showPassword}
-                    onClick={() => setShowPassword((value) => !value)}
-                  >
-                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                      <path d="M12 5C7 5 2.73 8.11 1 12c1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" />
-                    </svg>
-                  </button>
+              <form className="login-form" onSubmit={handleSignupSubmit}>
+                <div className="signup-row">
+                  <div className="field">
+                    <label className="label" htmlFor="signup-first-name">
+                      First Name
+                    </label>
+                    <input
+                      id="signup-first-name"
+                      name="firstName"
+                      type="text"
+                      className="input"
+                      placeholder="First Name"
+                      value={signupData.firstName}
+                      onChange={handleSignupChange}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="signup-last-name">
+                      Last Name
+                    </label>
+                    <input
+                      id="signup-last-name"
+                      name="lastName"
+                      type="text"
+                      className="input"
+                      placeholder="Last Name"
+                      value={signupData.lastName}
+                      onChange={handleSignupChange}
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="row-between">
-                <button type="button" className="link" onClick={openForgot}>
-                  Forgot Password
+                <div className="signup-row signup-row--pair">
+                  <div className="field">
+                    <label className="label" htmlFor="signup-dob">
+                      Date of Birth
+                    </label>
+                    <input
+                      id="signup-dob"
+                      name="dob"
+                      type="date"
+                      className="input"
+                      value={signupData.dob}
+                      onChange={handleSignupChange}
+                      required
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="label" htmlFor="signup-region">
+                      Region (New Zealand)
+                    </label>
+                    <select
+                      id="signup-region"
+                      name="region"
+                      className="input"
+                      value={signupData.region}
+                      onChange={handleSignupChange}
+                      required
+                    >
+                      <option value="">Select a city</option>
+                      {regions.map((region) => (
+                        <option key={region} value={region}>
+                          {region}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="signup-row signup-row--pair signup-row--tight">
+                  <div className="field">
+                    <label className="label" htmlFor="signup-email">
+                      Email Address
+                    </label>
+                    <input
+                      id="signup-email"
+                      name="email"
+                      type="email"
+                      className="input"
+                      placeholder="Email Address"
+                      value={signupData.email}
+                      onChange={handleSignupChange}
+                      required
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label className="label" htmlFor="signup-password">
+                      Password
+                    </label>
+                    <input
+                      id="signup-password"
+                      name="password"
+                      type="password"
+                      className="input"
+                      placeholder="Create a password"
+                      value={signupData.password}
+                      onChange={handleSignupChange}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {signupMessage && (
+                  <p className="reset-message success">{signupMessage}</p>
+                )}
+                {signupError && (
+                  <p className="reset-message error">{signupError}</p>
+                )}
+
+                <button type="submit" className="btn" disabled={signupLoading}>
+                  {signupLoading ? "Creating..." : "Create Account"}
                 </button>
-              </div>
-
-              <button type="submit" className="btn">
-                Login
-              </button>
+              </form>
 
               <p className="hint">
-                Don't have an account?{" "}
-                <button type="button" className="inline-link" onClick={openSignup}>
-                  Sign up
+                Already have an account?{" "}
+                <button type="button" className="inline-link" onClick={closeSignup}>
+                  Log in
                 </button>
               </p>
-            </form>
 
-            <div className="card-logo" aria-hidden="true">
+              <div className="card-logo" aria-hidden="true">
+                <InfinityLogo className="infinity-logo" focusable="false" />
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="card-title">Login</h2>
+
+              <form onSubmit={handleSubmit} className="login-form">
+                <div className="field">
+                  <label className="label" htmlFor="login-email">
+                    Email Address
+                  </label>
+                  <input
+                    id="login-email"
+                    type="email"
+                    className="input"
+                    placeholder="Email Address"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="label" htmlFor="login-password">
+                    Password
+                  </label>
+                  <div className="password-row">
+                    <input
+                      id="login-password"
+                      type={showPassword ? "text" : "password"}
+                      className="input"
+                      placeholder="Password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="eye-btn"
+                      aria-label="Toggle password visibility"
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword((value) => !value)}
+                    >
+                      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                        <path d="M12 5C7 5 2.73 8.11 1 12c1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {loginError && (
+                  <p className="reset-message error" role="alert">
+                    {loginError}
+                  </p>
+                )}
+
+                <div className="row-between">
+                  <span className="remember-copy">Stay signed in</span>
+                  <button type="button" className="link" onClick={openForgot}>
+                    Forgot Password
+                  </button>
+                </div>
+
+                <button type="submit" className="btn" disabled={loginLoading}>
+                  {loginLoading ? "Signing in..." : "Login"}
+                </button>
+
+                <p className="hint">
+                  Don't have an account?{" "}
+                  <button type="button" className="inline-link" onClick={openSignup}>
+                    Sign up
+                  </button>
+                </p>
+              </form>
+            </>
+          )}
+          </section>
+        </div>
+
+        <div className="login-visual" aria-hidden="true">
+          <div className="login-visual-inner">
+            <div className="visual-logo">
               <InfinityLogo className="infinity-logo" focusable="false" />
             </div>
-          </>
-        )}
-      </section>
+            <div className="visual-copy">
+              <p className="visual-eyebrow">Allora</p>
+              <h2>
+                {isSignup
+                  ? "Create your Allora workspace."
+                  : "Calm workspace for bookings and support."}
+              </h2>
+              <p>
+                {isSignup
+                  ? "Open an account to manage bookings, notes, and on-call support in one place."
+                  : "Track every request with friendly status cards and on-call support."}
+              </p>
+              {isSignup && (
+                <ul className="visual-list">
+                  <li>Unified bookings, support, and notes</li>
+                  <li>Invite teammates whenever you are ready</li>
+                  <li>Crafted for New Zealand customers</li>
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {forgotOpen && (
         <div className="reset-overlay" role="dialog" aria-modal="true">
@@ -548,7 +718,7 @@ export default function Login() {
                 aria-label="Close reset password form"
                 onClick={closeForgot}
               >
-                {"\u00d7"}
+                {"×"}
               </button>
             </header>
 

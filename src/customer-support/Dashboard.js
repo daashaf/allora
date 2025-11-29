@@ -12,7 +12,29 @@ import {
     serverTimestamp,
 } from "firebase/firestore";
 import { app } from "../firebase";
+import NavigationBar from "../components/NavigationBar";
 import "./Dashboard.css";
+
+const FALLBACK_SUPPORT_TOPICS = [
+    {
+        id: "basics",
+        title: "Getting started",
+        desc: "Create an account, post your first request, and understand approvals.",
+        faqs: [
+            { Q: "How do I create a ticket?", A: "Click '+ Create Ticket' above, fill in subject and description, then submit." },
+            { Q: "Do I need to be logged in?", A: "Logging in links tickets to your email. Guest tickets work, but updates arrive via email only." },
+        ],
+    },
+    {
+        id: "billing",
+        title: "Billing & payments",
+        desc: "Invoices, receipts, and payment timelines.",
+        faqs: [
+            { Q: "Where is my receipt?", A: "Receipts are emailed instantly after payment and appear in your ticket timeline." },
+            { Q: "Can I change payment method?", A: "Yes—reply on your ticket or create a new one and the team will update billing details." },
+        ],
+    },
+];
 
 function Dashboard() {
 
@@ -27,10 +49,9 @@ function Dashboard() {
     const [showNotifications, setShowNotifications] = useState(false);
     const [showTickets, setShowTickets] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [activeTopic, setActiveTopic] = useState(null);
-    const [openFaq, setOpenFaq] = useState(null);
-
+    const [activeTopic, setActiveTopic] = useState(0);
     const [feedbackTicket, setFeedbackTicket] = useState(null);
+    const [headerUserEmail, setHeaderUserEmail] = useState("");
 
 
 
@@ -38,7 +59,7 @@ function Dashboard() {
     // Real Data States
     const [notifications, setNotifications] = useState([]);
     const [tickets, setTickets] = useState([]);
-    const [supportTopics, setSupportTopics] = useState([]);
+    const [supportTopics, setSupportTopics] = useState(FALLBACK_SUPPORT_TOPICS);
     const [userInfo, setUserInfo] = useState({ name: "", email: "", phone: "" });
 
     // New ticket form
@@ -53,6 +74,9 @@ function Dashboard() {
     useEffect(() => {
         const fetchUserData = async () => {
             const currentUser = auth.currentUser;
+            if (currentUser?.email) {
+                setHeaderUserEmail(currentUser.email);
+            }
             if (!currentUser) return;
 
             try {
@@ -84,12 +108,18 @@ function Dashboard() {
         const currentUser = auth.currentUser;
         if (!currentUser) return;
 
-        const unsub = onSnapshot(collection(db, "tickets"), (snapshot) => {
-            const data = snapshot.docs
-                .map((doc) => ({ id: doc.id, ...doc.data() }))
-                .filter((t) => t.userEmail === currentUser.email);
-            setTickets(data);
-        });
+        const unsub = onSnapshot(
+            collection(db, "tickets"),
+            (snapshot) => {
+                const data = snapshot.docs
+                    .map((doc) => ({ id: doc.id, ...doc.data() }))
+                    .filter((t) => t.userEmail === currentUser.email);
+                setTickets(data);
+            },
+            (error) => {
+                console.error("Error fetching tickets:", error);
+            }
+        );
         return () => unsub();
     }, [db, auth]);
 
@@ -114,11 +144,24 @@ function Dashboard() {
                     faqs: item.FAQS || item.faqs || [],
                 };
             });
-            setSupportTopics(topicsData);
+
+            if (topicsData.length) {
+                setSupportTopics(topicsData);
+            } else {
+                setSupportTopics(FALLBACK_SUPPORT_TOPICS);
+            }
         });
 
         return () => unsub();
     }, [db]);
+
+    // Ensure a topic is always selected when data loads/changes
+    useEffect(() => {
+        if (!supportTopics.length) return;
+        if (activeTopic == null || activeTopic >= supportTopics.length) {
+            setActiveTopic(0);
+        }
+    }, [supportTopics, activeTopic]);
 
     //  LOGOUT 
     const handleLogout = () => {
@@ -133,15 +176,17 @@ function Dashboard() {
     //  CREATE NEW TICKET (AUTO USER INFO + SERVER TIME) 
     const handleCreateTicket = async (e) => {
         e.preventDefault();
-        if (!newTicket.subject.trim() || !newTicket.description.trim()) return;
+        if (!newTicket.subject.trim() || !newTicket.description.trim()) {
+            alert("Please fill in both subject and description.");
+            return;
+        }
         try {
             const currentUser = auth.currentUser;
             await addDoc(collection(db, "tickets"), {
                 subject: newTicket.subject,
                 description: newTicket.description,
                 status: newTicket.status,
-                createdAt: serverTimestamp(), //  exact Firestore server time
-                // Auto capture user details
+                createdAt: serverTimestamp(),
                 userId: currentUser?.uid || null,
                 userName: userInfo.name || "Unknown User",
                 userEmail: userInfo.email || currentUser?.email || "No Email",
@@ -149,8 +194,11 @@ function Dashboard() {
             });
             setNewTicket({ subject: "", description: "", status: "Open" });
             setShowCreateTicket(false);
+            setSuccessMessage("Ticket created successfully!");
+            setTimeout(() => setSuccessMessage(""), 3000);
         } catch (error) {
             console.error("Error creating ticket:", error);
+            alert("Failed to create ticket. Please try again.");
         }
     };
 
@@ -191,12 +239,16 @@ function Dashboard() {
 
 
     return (
-        <div className="dashboard-page">
+        <div className="support-page">
+            <NavigationBar activeSection="support" />
+            
             {/*  HEADER  */}
-            <header className="dashboard-header">
-                <h2 className="dashboard-title">Customer Support Dashboard</h2>
+            <header className="support-header">
+                <h2 className="support-title">Customer Support Dashboard</h2>
 
                 <div className="header-right">
+                    {headerUserEmail && <span className="header-user">Welcome back, {headerUserEmail}.</span>}
+
                     {/* My Tickets */}
                     <i
                         className="bi bi-journal-text header-icon"
@@ -246,29 +298,7 @@ function Dashboard() {
                     </div>
 
                     {/* Profile */}
-                    <div
-                        className="profile-section"
-                        onClick={() => {
-                            setShowLogout(!showLogout);
-                            setShowNotifications(false);
-                            setShowTickets(false);
-                        }}
-                    >
-                        <img
-                            src="https://via.placeholder.com/40"
-                            alt="User"
-                            className="profile-photo"
-                        />
-                        <i className="bi bi-caret-down-fill dropdown-arrow"></i>
-
-                        {showLogout && (
-                            <div className="logout-dropdown">
-                                <button className="logout-btn" onClick={handleLogout}>
-                                    Logout
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                    <div className="profile-section" />
                 </div>
             </header>
 
@@ -294,7 +324,7 @@ function Dashboard() {
                                     {topic.faqs.map((faq, i) => (
                                         <div key={i} className="faq-item search-result">
                                             <p>
-                                                <strong>{faq.Q || faq.q}</strong> — {faq.A || faq.a}
+                                                <strong>{faq.Q || faq.q}</strong> - {faq.A || faq.a}
                                             </p>
                                         </div>
                                     ))}
@@ -303,57 +333,44 @@ function Dashboard() {
                         </div>
                     ) : (
                         <p className="no-results">
-                            No results found —{" "}
-                            <button
-                                className="create-ticket-link"
-                                onClick={() => {
-                                    setShowTickets(true);
-                                    setShowCreateTicket(true);
-                                }}
-                            >
-                                create a support ticket
-                            </button>
-                            .
+                            No results found -{" "}
+                            create a support ticket.
                         </p>
 
                     )
-                ) : (
+                ) : supportTopics.length ? (
                     <div className="support-grid">
-                        {supportTopics.map((topic, index) => (
-                            <div
-                                key={index}
-                                className={`support-card ${activeTopic === index ? "active" : ""}`}
-                                onClick={() => setActiveTopic(activeTopic === index ? null : index)}
-                            >
-                                <h3>{topic.title}</h3>
-                                <p>{topic.desc}</p>
+                                {supportTopics.map((topic, index) => (
+                                    <div
+                                        key={index}
+                                        className={`support-card ${activeTopic === index ? "active" : ""}`}
+                                        onClick={() => setActiveTopic(index)}
+                                    >
+                                        <h3>{topic.title}</h3>
+                                        <p>{topic.desc}</p>
 
-                                {activeTopic === index && (
-                                    <div className="faq-section">
-                                        {(topic.faqs || []).map((faq, i) => (
-                                            <div key={i} className="faq-item">
-                                                <div
-                                                    className="faq-question"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setOpenFaq(openFaq === i ? null : i);
-                                                    }}
-                                                >
-                                                    <span>{faq.Q || faq.q}</span>
-                                                    <i
-                                                        className={`bi ${openFaq === i ? "bi-chevron-up" : "bi-chevron-down"
-                                                            }`}
-                                                    ></i>
-                                                </div>
-                                                <div className={`faq-answer ${openFaq === i ? "show" : ""}`}>
-                                                    <p>{faq.A || faq.a}</p>
-                                                </div>
+                                        {activeTopic === index && (
+                                            <div className="faq-section">
+                                                {(topic.faqs || []).map((faq, i) => (
+                                                    <div key={i} className="faq-item">
+                                                        <div className="faq-question">
+                                                            <span>{faq.Q || faq.q}</span>
+                                                        </div>
+                                                        <div className="faq-answer show">
+                                                            <p>{faq.A || faq.a}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                ))}
+                    </div>
+                ) : (
+                    <div className="support-empty-state">
+                        <h3>No help topics yet</h3>
+                        <p>Start by creating a ticket so our team can add resources for your request.</p>
+                            <span className="create-ticket-placeholder" />
                     </div>
                 )}
             </main>
@@ -369,8 +386,11 @@ function Dashboard() {
                         >
                             + Create
                         </button>
-                        <button className="close-btn" onClick={() => setShowTickets(false)}>
-                            ✕
+                        <button
+                            className="close-btn"
+                            onClick={() => setShowTickets(false)}
+                        >
+                            Close
                         </button>
                     </div>
                 </div>
@@ -409,7 +429,7 @@ function Dashboard() {
                                                     Give Feedback
                                                 </button>
                                             ) : (
-                                                "—"
+                                                "-"
                                             )}
                                         </td>
 
@@ -453,7 +473,7 @@ function Dashboard() {
                     </div>
                 )}
             </div>
-            {/* ⭐ FEEDBACK POPUP (NEW) */}
+            {/* FEEDBACK POPUP (NEW) */}
             {feedbackTicket && (
                 <div className="feedback-popup">
                     <div className="feedback-box">
@@ -468,11 +488,11 @@ function Dashboard() {
                             }
                         >
                             <option value="">Select rating</option>
-                            <option value="1">⭐ 1 - Bad</option>
-                            <option value="2">⭐ 2 - Poor</option>
-                            <option value="3">⭐ 3 - Okay</option>
-                            <option value="4">⭐ 4 - Good</option>
-                            <option value="5">⭐ 5 - Excellent</option>
+                            <option value="1">1 - Bad</option>
+                            <option value="2">2 - Poor</option>
+                            <option value="3">3 - Okay</option>
+                            <option value="4">4 - Good</option>
+                            <option value="5">5 - Excellent</option>
                         </select>
 
                         <label>Your Feedback:</label>
@@ -507,6 +527,7 @@ function Dashboard() {
 
                                     } catch (err) {
                                         console.error("Error submitting feedback:", err);
+                                        alert("Failed to submit feedback. Please try again.");
                                     }
                                 }}
 
@@ -533,7 +554,7 @@ function Dashboard() {
 
             {/*  FOOTER  */}
             <footer className="support-footer">
-                <p>© 2025 Allora Service Hub. All rights reserved.</p>
+                <p>(c) 2025 Allora Service Hub. All rights reserved.</p>
                 <div className="footer-social">
                     <p>To know more about our website, visit us on:</p>
                     <div className="social-icons">
@@ -558,3 +579,17 @@ function Dashboard() {
 }
 
 export default Dashboard;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
