@@ -5,7 +5,7 @@ import {
   signInAnonymously,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 
 const envConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -16,12 +16,12 @@ const envConfig = {
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
 };
 
-// Optional fallback values for local development (match the real project, not the typo)
+// Fallbacks keep local development working even if .env is missing.
 const fallbackConfig = {
   apiKey: "AIzaSyA1gGqKyv1Lo_wH5SNsVqPB92SW1GgGPa8",
-  authDomain: "allora-service-hub.firebaseapp.com",
-  projectId: "allora-service-hub",
-  storageBucket: "allora-service-hub.appspot.com",
+  authDomain: "allora-serice-hub.firebaseapp.com",
+  projectId: "allora-serice-hub",
+  storageBucket: "allora-serice-hub.appspot.com",
   messagingSenderId: "47437060835",
   appId: "1:47437060835:web:768f0a66e5d142776c43d6",
 };
@@ -34,10 +34,11 @@ const missingKeys = Object.entries(firebaseConfig)
   .filter(([, value]) => !value)
   .map(([key]) => key);
 
-const app =
+const appInstance =
   missingKeys.length > 0 ? null : getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 if (missingKeys.length > 0) {
+  // eslint-disable-next-line no-console
   console.warn(
     `[Firebase] Authentication is disabled because these values are missing: ${missingKeys.join(
       ", "
@@ -45,9 +46,34 @@ if (missingKeys.length > 0) {
   );
 }
 
-export const isFirebaseConfigured = Boolean(app);
-export const auth = app ? getAuth(app) : null;
-export const db = app ? getFirestore(app) : null;
+export const isFirebaseConfigured = Boolean(appInstance);
+export const app = appInstance;
+export const auth = appInstance ? getAuth(appInstance) : null;
+export const db = appInstance ? getFirestore(appInstance) : null;
+
+export const ensureUserRole = async (uid, email) => {
+  if (!db || !uid) return null;
+  const userRef = doc(db, "users", uid);
+  const snap = await getDoc(userRef);
+
+  if (!snap.exists()) {
+    await setDoc(userRef, {
+      email: email || "",
+      role: "Customer",
+      createdAt: serverTimestamp(),
+    });
+    return "Customer";
+  }
+
+  const data = snap.data();
+  const existingRole = data?.role || data?.Role || data?.userType;
+  if (existingRole) {
+    return existingRole;
+  }
+
+  await updateDoc(userRef, { role: "Customer" });
+  return "Customer";
+};
 
 const serviceEmail = process.env.REACT_APP_FIREBASE_SERVICE_EMAIL;
 const servicePassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD;
@@ -55,7 +81,7 @@ const servicePassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD;
 const fallbackUser = { uid: "unauthenticated-client", isAnonymous: true, fromFallback: true };
 
 let resolveAuthReady = null;
-export const authReady = app
+export const authReady = appInstance
   ? new Promise((resolve) => {
       resolveAuthReady = resolve;
     })
@@ -65,9 +91,11 @@ const tryServiceCredentials = async () => {
   if (!auth || !serviceEmail || !servicePassword) return false;
   try {
     await signInWithEmailAndPassword(auth, serviceEmail, servicePassword);
+    // eslint-disable-next-line no-console
     console.info("[Firebase] Signed in with service credentials.");
     return true;
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.warn(
       "[Firebase] Service credential login failed. Verify REACT_APP_FIREBASE_SERVICE_EMAIL/REACT_APP_FIREBASE_SERVICE_PASSWORD or reset the password.",
       error
@@ -98,6 +126,7 @@ if (auth) {
         unsubscribe();
       })
       .catch((error) => {
+        // eslint-disable-next-line no-console
         console.warn(
           "[Firebase] Anonymous authentication failed. Enable anonymous sign-in or provide credentials. Proceeding without auth (Firestore rules must allow this).",
           error
@@ -112,6 +141,7 @@ let warnedUnauthenticated = false;
 export const ensureFirebaseAuth = async () => {
   const user = await authReady;
   if (user?.fromFallback && !warnedUnauthenticated) {
+    // eslint-disable-next-line no-console
     console.warn(
       "[Firebase] No authenticated user is available. Firestore writes will only work if your rules allow unauthenticated access or if you enable email/password or anonymous auth."
     );

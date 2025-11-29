@@ -29,24 +29,24 @@ const FAQS = [
 const CUSTOMER_STORIES = [
   {
     id: 1,
-    name: "Sienna • Auckland",
-    title: "“I booked cleaners in minutes.”",
+    name: "Sienna - Auckland",
+    title: "I booked cleaners in minutes.",
     summary:
       "Allora matched me with two nearby teams. I picked my favourite and now they visit every fortnight without any admin stress.",
     service: "House Cleaning",
   },
   {
     id: 2,
-    name: "Mason • Wellington",
-    title: "“Our website launched ahead of schedule.”",
+    name: "Mason - Wellington",
+    title: "Our website launched ahead of schedule.",
     summary:
       "The design sprint kit gave me three quotes with detailed timelines. We went from idea to pixel-perfect in just 10 days.",
     service: "Web Design Sprint",
   },
   {
     id: 3,
-    name: "Ari • Christchurch",
-    title: "“Support felt like a concierge.”",
+    name: "Ari - Christchurch",
+    title: "Support felt like a concierge.",
     summary:
       "Whenever I had a change request, the Allora team relayed it instantly to the provider. Communication was seamless.",
     service: "Customer Support",
@@ -98,7 +98,7 @@ export default function Insights() {
                     <span className="faq-row-category">{faq.category}</span>
                     <span className="faq-row-question">{faq.question}</span>
                     <span className="faq-row-icon" aria-hidden="true">
-                      {isOpen ? "−" : "+"}
+                      {isOpen ? "-" : "+"}
                     </span>
                   </button>
                   <div className="faq-row-panel" hidden={!isOpen}>
@@ -131,3 +131,5 @@ export default function Insights() {
     </div>
   );
 }
+
+

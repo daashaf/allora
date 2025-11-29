@@ -2,94 +2,184 @@ import React from "react";
 import NavigationBar from "../components/NavigationBar";
 import "../about.css";
 
-const stats = [
-  { value: "50K+", label: "Bookings guided" },
-  { value: "120+", label: "Service categories" },
-  { value: "92%", label: "Repeat customers" },
-];
-
-const highlights = [
+const heroPoints = [
   {
-    title: "Local expertise",
-    copy: "City-based curators vet every provider and keep photo-led portfolios up to date.",
+    title: "Curated partners",
+    copy: "Local specialists vet every professional, maintain their playbooks, and review photo updates before they ship.",
   },
   {
-    title: "Quiet technology",
-    copy: "Automation handles the checklists so conversations stay human and intentional.",
+    title: "One shared thread",
+    copy: "Quotes, approvals, and progress shots live in a single timeline for customers, providers, and support.",
   },
   {
-    title: "Concierge support",
-    copy: "Specialists are on-call to smooth escalations, align schedules, and celebrate wins.",
+    title: "Human escalations",
+    copy: "Concierge teams monitor live work, step in when priorities shift, and keep communication calm and clear.",
   },
 ];
 
-const timeline = [
-  { year: "2019", text: "Allora begins as a simple request board built for friends and neighbours." },
-  {
-    year: "2021",
-    text: "We launch the shared workspace and onboard the first cohort of service partners.",
-  },
-  {
-    year: "2023",
-    text: "Customer success and pro tooling merge into one canvas—Allora Service Hub as you see it today.",
-  },
-  { year: "2025", text: "More than 120 categories live on the platform with 24/7 concierge coverage." },
+const metrics = [
+  { value: "50K+", label: "Bookings stewarded across homes and offices" },
+  { value: "4.8/5", label: "Average CSAT across priority services" },
+  { value: "120+", label: "Active service categories and formats" },
+  { value: "12 min", label: "Median first response from concierge" },
 ];
 
-const storyImage =
-  "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1200&q=80";
+const values = [
+  {
+    title: "Trust is designed, not assumed",
+    copy: "We start with neighbourhood-style referrals, then layer verification, insurance, and transparent communication.",
+  },
+  {
+    title: "Calm, quiet technology",
+    copy: "Automation handles reminders, scheduling, and routing so the human conversations stay thoughtful.",
+  },
+  {
+    title: "Care for both sides",
+    copy: "Providers earn more when they delight customers; ops coaches help them deliver premium experiences every time.",
+  },
+];
+
+const journey = [
+  { year: "2019", text: "A hallway notice board in Bengaluru becomes a digital concierge for neighbours." },
+  { year: "2021", text: "We onboard our first cohort of curated providers and launch live service timelines." },
+  { year: "2023", text: "Service Hub merges customer updates, pro tooling, and support escalation in one canvas." },
+  { year: "2025", text: "12 cities, 120+ categories, and 24/7 concierge coverage across India and New Zealand." },
+];
+
+const opsHighlights = [
+  { title: "Concierge coverage", detail: "24/7 support line with regional specialists for after-hours requests." },
+  {
+    title: "Service canvas",
+    detail: "Visual boards for quotes, approvals, schedules, and photo updates keep everyone aligned.",
+  },
+  { title: "Partner coaching", detail: "Playbooks by trade help providers operate like premium boutique brands." },
+];
+
+const coverageCities = ["Bengaluru", "Delhi NCR", "Hyderabad", "Pune", "Mumbai", "Chennai", "Auckland", "Wellington"];
 
 const heroImage =
-  "https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?auto=format&fit=crop&w=900&q=80";
+  "https://images.unsplash.com/photo-1580894894513-541e068a3e2b?auto=format&fit=crop&w=1200&q=80";
 
-const deskImage =
-  "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=870&q=80";
+const storyImage =
+  "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1100&q=80";
+
+const opsImage =
+  "https://images.unsplash.com/photo-1521737604893-ff4dc1d56d1f?auto=format&fit=crop&w=1100&q=80";
 
 export default function About() {
   return (
     <div className="about-page">
-      <div className="about-gradient about-gradient-one" aria-hidden="true" />
-      <div className="about-gradient about-gradient-two" aria-hidden="true" />
+      <div className="about-blob about-blob-one" aria-hidden="true" />
+      <div className="about-blob about-blob-two" aria-hidden="true" />
       <NavigationBar />
 
-      <main className="about-main">
+      <main className="about-shell">
         <section className="about-hero">
-          <div className="about-hero-left">
-            <p className="about-pill">About Allora</p>
-            <h1>We keep everyday services as thoughtful as favourite boutiques.</h1>
-            <p className="about-copy">
-              Inspired by the neighbourhood merchants we grew up with, Allora curates trusted professionals and wraps
-              them in a calm digital experience. Customers browse, book, and follow progress without friction.
+          <div className="about-hero-text">
+            <p className="about-tag">About Allora</p>
+            <h1>Concierge-grade service for every booking.</h1>
+            <p className="about-lede">
+              Allora combines curated professionals, live collaboration, and real people who stay on call so everyday
+              services feel effortless and reliable.
             </p>
-            <div className="about-stats">
-              {stats.map((item) => (
-                <article key={item.label}>
-                  <span>{item.value}</span>
-                  <p>{item.label}</p>
-                </article>
+
+            <div className="about-hero-actions">
+              <a className="about-btn primary" href="/get-started">
+                Start a request
+              </a>
+              <a className="about-btn ghost" href="/support">
+                Talk to support
+              </a>
+            </div>
+
+            <div className="about-hero-points">
+              {heroPoints.map((point) => (
+                <div key={point.title} className="about-point">
+                  <span className="about-point-dot" aria-hidden="true" />
+                  <div>
+                    <p className="about-point-title">{point.title}</p>
+                    <p className="about-point-copy">{point.copy}</p>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
-          <div className="about-hero-media">
-            <img src={heroImage} alt="Allora studio session" loading="lazy" />
-            <div className="about-hero-note">
-              <p>Morning sync · Studio Bengaluru</p>
-              <span>Planning concierge handoffs and local partner launches.</span>
+
+          <div className="about-hero-right">
+            <div className="about-card about-snapshot">
+              <div className="about-card-head">
+                <div>
+                  <p className="about-tag subtle">Live operations</p>
+                  <h3>Concierge overview</h3>
+                </div>
+                <span className="about-badge">Active</span>
+              </div>
+
+              <div className="about-card-metrics">
+                <div>
+                  <p className="about-metric-value">12 min</p>
+                  <p className="about-metric-label">Median response</p>
+                </div>
+                <div>
+                  <p className="about-metric-value">24/7</p>
+                  <p className="about-metric-label">Coverage</p>
+                </div>
+                <div>
+                  <p className="about-metric-value">50K+</p>
+                  <p className="about-metric-label">Bookings monitored</p>
+                </div>
+              </div>
+
+              <div className="about-footprint">
+                <p className="about-footprint-label">City footprint</p>
+                <div className="about-chip-row">
+                  {coverageCities.map((city) => (
+                    <span key={city} className="about-chip">
+                      {city}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="about-hero-visual">
+              <img src={heroImage} alt="Allora concierge and provider on a call" loading="lazy" />
+              <div className="about-hero-chip">
+                <p>"We keep the thread human while software does the heavy lifting."</p>
+                <span>Sahana - Concierge Lead</span>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="about-highlights">
-          <div className="about-highlights-header">
-            <h2>The Allora pulse</h2>
+        <section className="about-metrics">
+          <div className="about-section-header">
+            <p className="about-tag subtle">Proof points</p>
+            <h2>Numbers that anchor how we work.</h2>
             <p>
-              Three principles shape every screen, phone call, and doorstep interaction. They are simple by design so
-              the experience never feels automated or cold.
+              Every request blends concierge judgment with transparent data. These signals guide how we serve customers
+              and partners daily.
             </p>
           </div>
-          <div className="about-highlights-grid">
-            {highlights.map((item) => (
-              <article key={item.title} className="about-highlight-card">
+          <div className="about-metrics-grid">
+            {metrics.map((item) => (
+              <article key={item.label} className="about-metric-card">
+                <span className="about-metric-value">{item.value}</span>
+                <p className="about-metric-label">{item.label}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="about-values">
+          <div className="about-section-header">
+            <p className="about-tag subtle">Operating system</p>
+            <h2>The beliefs that shape every interaction.</h2>
+            <p>Simple principles keep Allora warm, dependable, and clear - whether you are booking or fulfilling.</p>
+          </div>
+          <div className="about-values-grid">
+            {values.map((item) => (
+              <article key={item.title} className="about-value-card">
                 <h3>{item.title}</h3>
                 <p>{item.copy}</p>
               </article>
@@ -99,32 +189,40 @@ export default function About() {
 
         <section className="about-story">
           <div className="about-story-media">
-            <img src={storyImage} alt="Allora concierge team" loading="lazy" />
+            <img src={storyImage} alt="Allora team planning a service rollout" loading="lazy" />
           </div>
           <div className="about-story-copy">
-            <p className="about-pill subtle">Our story</p>
-            <h2>A marketplace with a concierge soul.</h2>
+            <p className="about-tag subtle">Our story</p>
+            <h2>We built Allora after coordinating repairs for our own buildings.</h2>
             <p>
-              We started in apartment lobbies, matching neighbours with reliable service pros. Word spread, our tools
-              matured, and the concierge mindset never left. Today Allora supports cities across India, yet every
-              booking still feels personal.
+              The early days were just neighbours, trusted pros, and handwritten checklists. We digitised that warmth and
+              rigour so more people could rely on it without chasing updates.
             </p>
-            <ul>
-              <li>Requests stay visual—photos, voice notes, and schedules live together.</li>
-              <li>Providers receive playbooks that help them deliver standout experiences.</li>
-              <li>Customers always know who to call because our support line is staffed around the clock.</li>
-            </ul>
+            <div className="about-bullets">
+              <div className="about-bullet">
+                <span className="about-point-dot" aria-hidden="true" />
+                <p>Started as a hallway notice board in Bengaluru, expanded through word of mouth.</p>
+              </div>
+              <div className="about-bullet">
+                <span className="about-point-dot" aria-hidden="true" />
+                <p>Concierge hosts and ops engineers co-design tools they use with customers daily.</p>
+              </div>
+              <div className="about-bullet">
+                <span className="about-point-dot" aria-hidden="true" />
+                <p>Every new service category runs live pilots before we launch it to the wider community.</p>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="about-timeline">
-          <div className="about-timeline-header">
-            <p className="about-pill subtle">Milestones</p>
+        <section className="about-journey">
+          <div className="about-section-header center">
+            <p className="about-tag subtle">Milestones</p>
             <h2>From hallway experiments to a national platform.</h2>
           </div>
-          <div className="about-timeline-grid">
-            {timeline.map((item) => (
-              <article key={item.year}>
+          <div className="about-journey-grid">
+            {journey.map((item) => (
+              <article key={item.year} className="about-journey-card">
                 <span>{item.year}</span>
                 <p>{item.text}</p>
               </article>
@@ -132,34 +230,53 @@ export default function About() {
           </div>
         </section>
 
-        <section className="about-team">
-          <div className="about-team-card">
-            <div>
-              <p className="about-pill subtle">Team snapshot</p>
-              <h2>Designers, city leads, concierge hosts, and engineers building for the same north star.</h2>
+        <section className="about-ops">
+          <div className="about-ops-card">
+            <div className="about-ops-text">
+              <p className="about-tag subtle">How we operate</p>
+              <h2>Concierge hearts with an operator's discipline.</h2>
               <p>
-                The Allora Service Hub is crafted in Bengaluru and Auckland with satellite partners in Delhi, Pune, and
-                Wellington. We design weekly walk-throughs inside real homes and offices so the product reflects how
-                people actually live.
+                Every ticket blends human judgment with a reliable playbook. The result: predictable outcomes without
+                losing the warmth of a trusted neighbourhood referral.
               </p>
+              <div className="about-ops-grid">
+                {opsHighlights.map((item) => (
+                  <div key={item.title} className="about-ops-item">
+                    <p className="about-ops-title">{item.title}</p>
+                    <p className="about-ops-copy">{item.detail}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <img src={deskImage} alt="Product team desk" loading="lazy" />
+            <div className="about-ops-media">
+              <img src={opsImage} alt="Ops team reviewing live service timelines" loading="lazy" />
+              <div className="about-ops-meter">
+                <div className="about-ops-meter-head">
+                  <p>Service health</p>
+                  <span>Live</span>
+                </div>
+                <div className="about-ops-meter-bar">
+                  <span style={{ width: "86%" }} />
+                </div>
+                <p className="about-ops-meter-copy">Concierge team resolves 86% of issues without escalations.</p>
+              </div>
+            </div>
           </div>
         </section>
 
         <section className="about-cta">
           <div className="about-cta-card">
             <div>
-              <p className="about-pill subtle">Next step</p>
+              <p className="about-tag subtle">Next step</p>
               <h2>Bring your next project to Allora.</h2>
               <p>Tell us what you need and our concierge will share curated providers in less than an hour.</p>
             </div>
             <div className="about-actions">
               <a className="about-btn primary" href="/get-started">
-                Start a Request
+                Start a request
               </a>
-              <a className="about-btn ghost" href="/insights#contact">
-                Talk to Support
+              <a className="about-btn ghost" href="/support">
+                Talk to support
               </a>
             </div>
           </div>

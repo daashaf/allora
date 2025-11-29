@@ -8,10 +8,10 @@ export default function ForgotPassword() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!email.trim()) {
-      setMessage("✗ Please enter your email address.");
+      setMessage("??? Please enter your email address.");
       return;
     }
-    setMessage(`✓ Password reset link sent to ${email}`);
+    setMessage(`??? Password reset link sent to ${email}`);
     setEmail("");
   };
 
@@ -45,7 +45,7 @@ export default function ForgotPassword() {
               marginTop: "12px",
               fontSize: "13px",
               fontWeight: 600,
-              color: message.startsWith("✓") ? "#2ecc71" : "#e74c3c",
+              color: message.startsWith("???") ? "#2ecc71" : "#e74c3c",
               textAlign: "center",
             }}
           >

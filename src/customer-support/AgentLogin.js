@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import "./AgentLogin.css";
@@ -15,7 +15,7 @@ function AgentLogin() {
         const auth = getAuth();
         signInWithEmailAndPassword(auth, email, password)
             .then(() => {
-                navigate("/agent-dashboard");
+                navigate("/support");
             })
             .catch(() => setError("Invalid email or password. Please try again."));
     };
@@ -39,7 +39,7 @@ function AgentLogin() {
 
                     <div className="password-container">
                         <input
-                            type={showPassword ? "text" : "password"}
+                            type={showPassword ? "Hide" : "Show"}
                             placeholder="Password"
                             className="input-box"
                             value={password}
@@ -50,7 +50,7 @@ function AgentLogin() {
                             className="eye-icon"
                             onClick={() => setShowPassword(!showPassword)}
                         >
-                            {showPassword ? "🙈" : "👁"}
+                            {showPassword ? "Hide" : "Show"}
                         </span>
                     </div>
 
@@ -66,3 +66,6 @@ function AgentLogin() {
 }
 
 export default AgentLogin;
+
+
+

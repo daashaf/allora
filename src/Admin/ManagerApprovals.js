@@ -179,8 +179,8 @@ export default function ManagerApprovals() {
         </select>
       </div>
 
-      <div className="table-wrapper">
-        <table className="data-table">
+      <div className="admin-table-wrapper">
+        <table className="admin-table">
           <thead>
             <tr>
               <th>Applicant</th>
@@ -210,7 +210,7 @@ export default function ManagerApprovals() {
                   <td>
                     <span className={`badge ${r.status.toLowerCase()}`}>{r.status}</span>
                   </td>
-                  <td className="table-actions">
+                  <td className="admin-table-actions">
                     <button className="action-btn" onClick={() => handleView(r)}>View</button>
                     {r.status === "Pending" && (
                       <>

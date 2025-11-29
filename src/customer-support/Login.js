@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase"; //  import Firebase auth
@@ -67,7 +67,7 @@ function Login() {
                             className="eye-icon"
                             onClick={() => setShowPassword(!showPassword)}
                         >
-                            {showPassword ? "🙈" : "👁"}
+                            {showPassword ? "Hide" : "Show"}
                         </span>
                     </div>
                     {errors.password && <p className="error-msg">{errors.password}</p>}
@@ -92,3 +92,5 @@ function Login() {
 }
 
 export default Login;
+
+

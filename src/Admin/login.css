@@ -49,6 +49,12 @@
   left: -140px;
 }
 
+.bg-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 /* Brand title */
 .brand-wrap {
   text-align: center;
@@ -70,6 +76,10 @@
   margin-top: -6px;
 }
 
+.space-top {
+  margin-top: 10px;
+}
+
 /* Login card */
 .card {
   background: var(--panel);
@@ -88,6 +98,12 @@
   color: #123a5a;
   text-align: center;
   margin-bottom: 16px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* Inputs and labels */
@@ -196,4 +212,12 @@
   .brand {
     font-size: 32px;
   }
+}
+
+.reset-message {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d14343;
+  text-align: center;
 }

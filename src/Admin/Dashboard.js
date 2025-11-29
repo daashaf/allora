@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { signOut } from "firebase/auth";
 import {
   addDoc,
   collection,
@@ -11,7 +12,7 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { db, ensureFirebaseAuth } from "../firebase";
+import { auth, db, ensureFirebaseAuth } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import "./dashboard.css";
 
@@ -29,6 +30,19 @@ export default function AdminDashboard() {
   const [sidebarOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    if (!window.confirm("Log out of the admin dashboard?")) return;
+    try {
+      if (auth) {
+        await signOut(auth);
+      }
+    } catch (error) {
+      console.warn("[Auth] Failed to sign out admin user", error);
+    } finally {
+      navigate("/admin/login", { replace: true });
+    }
+  };
 
   const menuRef = useRef(null);
   useEffect(() => {
@@ -613,9 +627,10 @@ const ensureAuth = async () => {
   };
 
   return (
-    <div className="dashboard-page">
+    <div className="admin-page">
+      <div className="admin-dashboard">
       {/* Sidebar */}
-      <aside className={`sidebar ${sidebarOpen ? "" : "collapsed"}`}>
+      <aside className={`admin-sidebar ${sidebarOpen ? "" : "collapsed"}`}>
         <h2 className="logo">
           Allora
           <br />
@@ -638,11 +653,11 @@ const ensureAuth = async () => {
       </aside>
 
       {/* Main Content */}
-      <main className="main-content">
+      <main className="admin-main-content">
         {/* Top Navbar */}
-        <header className="topbar">
+        <header className="admin-topbar">
           <h3 className="navbar-title">Admin Dashboard</h3>
-          <div className="topbar-actions">
+          <div className="admin-actions">
             <div className="menu-wrapper" ref={menuRef}>
               <button
                 className="icon-btn menu-toggle"
@@ -672,11 +687,7 @@ const ensureAuth = async () => {
             </div>
             <button
               className="logout-top"
-              onClick={() => {
-                if (window.confirm("You will remain on the dashboard. Continue?")) {
-                  window.location.href = "/admin/dashboard";
-                }
-              }}
+              onClick={handleLogout}
             >
               Logout
             </button>
@@ -686,11 +697,11 @@ const ensureAuth = async () => {
         {/* Dashboard view */}
         {activeSection === "Dashboard" ? (
           <section className="dashboard">
-            <h1 className="title">Dashboard</h1>
+            <h1 className="admin-title">Dashboard</h1>
 
-            <div className="cards">
+            <div className="admin-cards">
               {summaryCards.map((card) => (
-                <div key={card.key} className="card commission">
+                <div key={card.key} className="admin-card commission">
                   <h4>{card.label}</h4>
                   <h2>{card.value}</h2>
                   {card.detail && <p>{card.detail}</p>}
@@ -698,8 +709,8 @@ const ensureAuth = async () => {
               ))}
             </div>
 
-            <div className="cards">
-              <div className="card latest">
+            <div className="admin-cards">
+              <div className="admin-card latest">
                 <h4>Recent Notifications</h4>
                 <div className="activity">
                   {recentNotifications.length === 0 ? (
@@ -710,7 +721,7 @@ const ensureAuth = async () => {
                         <strong>{notification.subject || "Untitled notification"}</strong>
                         <br />
                         <span>
-                          {notification.audience || "All"} • {notification.sentAt || "Queued"}
+                          {notification.audience || "All"} ??? {notification.sentAt || "Queued"}
                         </span>
                       </p>
                     ))
@@ -718,7 +729,7 @@ const ensureAuth = async () => {
                 </div>
               </div>
 
-              <div className="card latest">
+              <div className="admin-card latest">
                 <h4>Latest Tickets</h4>
                 <div className="activity">
                   {recentIssues.length === 0 ? (
@@ -729,7 +740,7 @@ const ensureAuth = async () => {
                         <strong>{ticket.subject}</strong>
                         <br />
                         <span>
-                          {ticket.customer} • {ticket.createdAt || "Pending"}
+                          {ticket.customer} ??? {ticket.createdAt || "Pending"}
                         </span>
                       </p>
                     ))
@@ -737,7 +748,7 @@ const ensureAuth = async () => {
                 </div>
               </div>
 
-              <div className="card messages">
+              <div className="admin-card messages">
                 <h4>Service Updates</h4>
                 <div className="activity">
                   {recentServices.length === 0 ? (
@@ -745,7 +756,7 @@ const ensureAuth = async () => {
                   ) : (
                     recentServices.map((service) => (
                       <p key={service.id}>
-                        {service.service || "Service"} • {service.status || "Pending"}
+                        {service.service || "Service"} ??? {service.status || "Pending"}
                       </p>
                     ))
                   )}
@@ -801,9 +812,9 @@ const ensureAuth = async () => {
             {/* Service Management info panel removed per request */}
 
             {activeSection === "Service Management" && (
-              <div className="table-wrapper" style={{ marginTop: 12 }}>
+              <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
                 {serviceView === "Manage Services" ? (
-                  <table className="data-table">
+                  <table className="admin-table">
                     <thead>
                       <tr>
                         <th>Service</th>
@@ -831,7 +842,7 @@ const ensureAuth = async () => {
                               </span>
                             </td>
                             <td>{s.submittedAt}</td>
-                            <td className="table-actions">
+                            <td className="admin-table-actions">
                               <button className="action-btn" onClick={() => toggleServiceStatus(s.id)}>
                                 {s.status === "Suspended" ? "Activate" : "Suspend"}
                               </button>
@@ -843,7 +854,7 @@ const ensureAuth = async () => {
                     </tbody>
                   </table>
                 ) : (
-                  <table className="data-table">
+                  <table className="admin-table">
                     <thead>
                       <tr>
                         <th>Service</th>
@@ -871,7 +882,7 @@ const ensureAuth = async () => {
                                 {getBadgeLabel(l.status)}
                               </span>
                             </td>
-                            <td className="table-actions">
+                            <td className="admin-table-actions">
                               {l.status === "Pending" ? (
                                 <>
                                   <button className="action-btn primary" onClick={() => approveListing(l.id)}>Approve</button>
@@ -895,8 +906,8 @@ const ensureAuth = async () => {
                 <div className="actions-bar top-right">
                   <button className="action-btn primary" onClick={addCategoryService}>Add Service</button>
                 </div>
-                <div className="table-wrapper" style={{ marginTop: 12 }}>
-                  <table className="data-table">
+                <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
+                  <table className="admin-table">
                     <thead>
                       <tr>
                         <th>Service</th>
@@ -922,7 +933,7 @@ const ensureAuth = async () => {
                                 {getBadgeLabel(s.status)}
                               </span>
                             </td>
-                            <td className="table-actions">
+                            <td className="admin-table-actions">
                               <button className="action-btn" onClick={() => toggleCategoryService(s.id)}>
                                 {s.status === "Suspended" ? "Activate" : "Suspend"}
                               </button>
@@ -942,8 +953,8 @@ const ensureAuth = async () => {
                 <div className="actions-bar top-right">
                   <button className="action-btn primary" onClick={addRole}>Add Role</button>
                 </div>
-                <div className="table-wrapper" style={{ marginTop: 12 }}>
-                  <table className="data-table">
+                <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
+                  <table className="admin-table">
                     <thead>
                       <tr>
                         <th>Role</th>
@@ -976,7 +987,7 @@ const ensureAuth = async () => {
                                 ))}
                               </div>
                             </td>
-                            <td className="table-actions">
+                            <td className="admin-table-actions">
                               <button className="action-btn danger" onClick={() => deleteRole(r.id)}>Delete</button>
                             </td>
                           </tr>
@@ -1006,9 +1017,9 @@ const ensureAuth = async () => {
                 </div>
 
                 {notificationView === "Compose" ? (
-                  <div className="table-wrapper" style={{ marginTop: 12, padding: 16 }}>
+                  <div className="admin-table-wrapper" style={{ marginTop: 12, padding: 16 }}>
                     <div className="settings-grid">
-                      <div className="form-group">
+                      <div className="admin-form-group">
                         <label>Audience</label>
                         <select
                           className="select"
@@ -1020,7 +1031,7 @@ const ensureAuth = async () => {
                           <option>All Users</option>
                         </select>
                       </div>
-                      <div className="form-group">
+                      <div className="admin-form-group">
                         <label>Channel</label>
                         <select
                           className="select"
@@ -1031,7 +1042,7 @@ const ensureAuth = async () => {
                           <option>In-App</option>
                         </select>
                       </div>
-                      <div className="form-group" style={{ gridColumn: "1/-1" }}>
+                      <div className="admin-form-group" style={{ gridColumn: "1/-1" }}>
                         <label>Subject</label>
                         <input
                           className="search"
@@ -1041,7 +1052,7 @@ const ensureAuth = async () => {
                           onChange={(e) => setCompose((c) => ({ ...c, subject: e.target.value }))}
                         />
                       </div>
-                      <div className="form-group" style={{ gridColumn: "1/-1" }}>
+                      <div className="admin-form-group" style={{ gridColumn: "1/-1" }}>
                         <label>Message</label>
                         <textarea
                           className="search"
@@ -1058,8 +1069,8 @@ const ensureAuth = async () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="table-wrapper" style={{ marginTop: 12 }}>
-                    <table className="data-table">
+                  <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
+                    <table className="admin-table">
                       <thead>
                         <tr>
                           <th>Subject</th>
@@ -1114,8 +1125,8 @@ const ensureAuth = async () => {
                     All
                   </button>
                 </div>
-                <div className="table-wrapper" style={{ marginTop: 12 }}>
-                  <table className="data-table">
+                <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
+                  <table className="admin-table">
                     <thead>
                       <tr>
                         <th>Subject</th>
@@ -1147,7 +1158,7 @@ const ensureAuth = async () => {
                               </span>
                             </td>
                             <td>{iss.createdAt}</td>
-                            <td className="table-actions">
+                            <td className="admin-table-actions">
                               {iss.status === "Open" && (
                                 <>
                                   <button className="action-btn primary" onClick={() => resolveIssue(iss.id)}>Resolve</button>
@@ -1176,14 +1187,14 @@ const ensureAuth = async () => {
             {activeSection === "System Management" && (
               <>
                 {systemView !== "Site Settings" ? (
-                  <div className="table-wrapper" style={{ marginTop: 12 }}>
+                  <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
                     <div className="page-header" style={{ padding: "10px 12px" }}>
                       <div></div>
                       <div className="header-actions">
                         <button className="action-btn primary" onClick={addCategory}>Add Category</button>
                       </div>
                     </div>
-                    <table className="data-table">
+                    <table className="admin-table">
                       <thead>
                         <tr>
                           <th>Category</th>
@@ -1205,7 +1216,7 @@ const ensureAuth = async () => {
                               <td>
                                 <span className={`badge ${c.visible ? "visible" : "hidden"}`}>{c.visible ? "Visible" : "Hidden"}</span>
                               </td>
-                              <td className="table-actions">
+                              <td className="admin-table-actions">
                                 <button className="action-btn" onClick={() => toggleCategoryVisibility(c.id)}>
                                   {c.visible ? "Hide" : "Show"}
                                 </button>
@@ -1218,9 +1229,9 @@ const ensureAuth = async () => {
                     </table>
                   </div>
                 ) : (
-                  <div className="table-wrapper" style={{ marginTop: 12, padding: 16 }}>
+                  <div className="admin-table-wrapper" style={{ marginTop: 12, padding: 16 }}>
                     <div className="settings-grid">
-                      <div className="form-group">
+                      <div className="admin-form-group">
                         <label>Site Name</label>
                         <input
                           className="search"
@@ -1229,7 +1240,7 @@ const ensureAuth = async () => {
                           onChange={(e) => setSettings((s) => ({ ...s, siteName: e.target.value }))}
                         />
                       </div>
-                      <div className="form-group">
+                      <div className="admin-form-group">
                         <label>Default User Role</label>
                         <select
                           className="select"
@@ -1243,7 +1254,7 @@ const ensureAuth = async () => {
                         </select>
                       </div>
 
-                      <div className="form-group">
+                      <div className="admin-form-group">
                         <label>Items Per Page</label>
                         <input
                           className="search"
@@ -1255,7 +1266,7 @@ const ensureAuth = async () => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="admin-form-group">
                         <label>Maintenance Mode</label>
                         <div className="switch">
                           <input
@@ -1268,7 +1279,7 @@ const ensureAuth = async () => {
                         </div>
                       </div>
 
-                      <div className="form-group">
+                      <div className="admin-form-group">
                         <label>Email Notifications</label>
                         <div className="switch">
                           <input
@@ -1359,8 +1370,8 @@ const ensureAuth = async () => {
             {/* Short notes removed as requested */}
 
             {activeSection === "User Management" && (
-              <div className="table-wrapper" style={{ marginTop: 12 }}>
-                <table className="data-table">
+              <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
+                <table className="admin-table">
                   <thead>
                     <tr>
                       <th>Name</th>
@@ -1397,6 +1408,7 @@ const ensureAuth = async () => {
           </section>
         )}
       </main>
+      </div>
     </div>
   );
 }

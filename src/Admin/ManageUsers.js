@@ -230,8 +230,8 @@ export default function ManageUsers() {
         </button>
       </div>
 
-      <div className="table-wrapper">
-        <table className="data-table">
+      <div className="admin-table-wrapper">
+        <table className="admin-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -265,7 +265,7 @@ export default function ManageUsers() {
                     <span className={`badge ${u.status.toLowerCase()}`}>{u.status}</span>
                   </td>
                   <td>{u.joinedAt}</td>
-                  <td className="table-actions">
+                  <td className="admin-table-actions">
                     <button className="action-btn" onClick={() => setViewUser(u)}>
                       View
                     </button>
@@ -284,16 +284,16 @@ export default function ManageUsers() {
       </div>
 
       {showAddModal && (
-        <div className="modal-backdrop" onClick={closeAddModal}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="admin-admin-modal-backdrop" onClick={closeAddModal}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-admin-modal-header">
               <h2>Add New User</h2>
               <button className="close-btn" onClick={closeAddModal}>
                 x
               </button>
             </div>
             <form onSubmit={handleAddUser}>
-              <div className="form-group">
+              <div className="admin-form-group">
                 <label>Name</label>
                 <input
                   type="text"
@@ -303,7 +303,7 @@ export default function ManageUsers() {
                   required
                 />
               </div>
-              <div className="form-group">
+              <div className="admin-form-group">
                 <label>Email</label>
                 <input
                   type="email"
@@ -313,7 +313,7 @@ export default function ManageUsers() {
                   required
                 />
               </div>
-              <div className="form-group">
+              <div className="admin-form-group">
                 <label>Role</label>
                 <select name="role" value={formData.role} onChange={handleFormChange}>
                   <option value="Customer">Customer</option>
@@ -321,7 +321,7 @@ export default function ManageUsers() {
                   <option value="Service Provider">Service Provider</option>
                 </select>
               </div>
-              <div className="form-group">
+              <div className="admin-form-group">
                 <label>Status</label>
                 <select name="status" value={formData.status} onChange={handleFormChange}>
                   <option value="Active">Active</option>
@@ -329,7 +329,7 @@ export default function ManageUsers() {
                   <option value="Suspended">Suspended</option>
                 </select>
               </div>
-              <div className="modal-actions">
+              <div className="admin-admin-modal-actions">
                 <button type="button" className="action-btn" onClick={closeAddModal} disabled={submitting}>
                   Cancel
                 </button>
@@ -343,9 +343,9 @@ export default function ManageUsers() {
       )}
 
       {viewUser && (
-        <div className="modal-backdrop" onClick={() => setViewUser(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className="admin-admin-modal-backdrop" onClick={() => setViewUser(null)}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-admin-modal-header">
               <h2>User Details</h2>
               <button className="close-btn" onClick={() => setViewUser(null)}>
                 x
@@ -369,7 +369,7 @@ export default function ManageUsers() {
                 <strong>Joined:</strong> {viewUser.joinedAt}
               </div>
             </div>
-            <div className="modal-actions">
+            <div className="admin-admin-modal-actions">
               <button className="action-btn" onClick={() => setViewUser(null)}>
                 Close
               </button>
