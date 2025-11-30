@@ -12,6 +12,12 @@
 .dashboard-nav .container-fluid {
   padding-left: 12px;
   padding-right: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.dashboard-nav {
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 /* ---------- TEXT (LEFT / CENTER AREA) ---------- */
@@ -33,7 +39,7 @@
 
 /* ---------- LOGOUT (RIGHT SIDE) ---------- */
 .nav-support-logout {
-  margin-left: 0;
+  margin-left: 100px;
   white-space: nowrap;
   font-size: 0.95rem;
   font-weight: 600;
