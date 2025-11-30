@@ -4,12 +4,13 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
 import { auth, db } from "../firebase";
-import "../dashboard.css";
+import "./NavigationBar.css";
 
 export default function NavigationBar({ activeSection, onSectionSelect }) {
   const [isNavCollapsed, setIsNavCollapsed] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
+  const [showLoginMenu, setShowLoginMenu] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -37,7 +38,7 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
 
   const handleJoinAsProfessional = () => {
     setIsNavCollapsed(true);
-    navigate("/login", { state: { role: "Service Provider" } });
+    navigate("/provider/login", { state: { role: "Service Provider" } });
   };
 
   const handleLogout = async () => {
@@ -51,6 +52,10 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
       navigate("/login");
     }
   };
+
+  const toggleLoginMenu = () => setShowLoginMenu((prev) => !prev);
+
+  const closeLoginMenu = () => setShowLoginMenu(false);
 
   const toggleNavCollapse = () => {
     setIsNavCollapsed((previous) => !previous);
@@ -82,7 +87,22 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
     return () => unsub();
   }, []);
 
+  const pathname = location.pathname;
+  const isAgentView = pathname.startsWith("/agent-dashboard") || currentRole === "Customer Support";
+  const isAdminView = pathname.startsWith("/admin") || currentRole === "Administrator";
+  const isProviderView = pathname.startsWith("/provider") || currentRole === "Service Provider";
+  const isMinimalNav = isAgentView || isAdminView || isProviderView;
+
+  const minimalHeading = () => {
+    if (isAgentView) return { kicker: "Agent workspace", title: "Customer Support Dashboard" };
+    if (isAdminView) return { kicker: "Admin workspace", title: "Admin Dashboard" };
+    if (isProviderView) return { kicker: "Provider workspace", title: "Service Provider Dashboard" };
+    return null;
+  };
+
   const renderLinks = () => {
+    if (isMinimalNav) return null;
+
     if (!currentUser) {
       return (
         <>
@@ -122,75 +142,6 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
       );
     }
 
-    if (currentRole === "Administrator") {
-      return (
-        <>
-          <button
-            type="button"
-            className={navLinkClass("discover", "/discover")}
-            onClick={handleDiscoverClick}
-            aria-current={location.pathname.startsWith("/discover") ? "page" : undefined}
-          >
-            Discover
-          </button>
-          <button
-            type="button"
-            className={navLinkClass("board", "/my-board")}
-            onClick={() => handleNavRouteClick("/my-board")}
-            aria-current={location.pathname.startsWith("/my-board") ? "page" : undefined}
-          >
-            My Board
-          </button>
-          <button
-            type="button"
-            className={navLinkClass(null, "/admin/dashboard")}
-            onClick={() => handleNavRouteClick("/admin/dashboard")}
-            aria-current={location.pathname.startsWith("/admin/dashboard") ? "page" : undefined}
-          >
-            Admin Panel
-          </button>
-          <button
-            type="button"
-            className={navLinkClass(null, "/admin/users")}
-            onClick={() => handleNavRouteClick("/admin/users")}
-            aria-current={location.pathname.startsWith("/admin/users") ? "page" : undefined}
-          >
-            Manage Users
-          </button>
-          <button type="button" className="dashboard-nav-link" onClick={handleLogout}>
-            Logout
-          </button>
-        </>
-      );
-    }
-
-    if (currentRole === "Customer Support") {
-      return (
-        <>
-          <button
-            type="button"
-            className={navLinkClass("discover", "/discover")}
-            onClick={handleDiscoverClick}
-            aria-current={location.pathname.startsWith("/discover") ? "page" : undefined}
-          >
-            Discover
-          </button>
-          <button
-            type="button"
-            className={navLinkClass(null, "/support")}
-            onClick={() => handleNavRouteClick("/support")}
-            aria-current={location.pathname.startsWith("/support") ? "page" : undefined}
-          >
-            Support Dashboard
-          </button>
-          <button type="button" className="dashboard-nav-link" onClick={handleLogout}>
-            Logout
-          </button>
-        </>
-      );
-    }
-
-    // Customer or fallback
     return (
       <>
         <button
@@ -265,17 +216,44 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
           </div>
 
           <div className="nav-actions d-flex align-items-center gap-3 mt-3 mt-lg-0">
-            <button
-              type="button"
-              className={navLinkClass(null, "/support")}
-              onClick={() => handleNavRouteClick("/support")}
-              aria-current={location.pathname.startsWith("/support") ? "page" : undefined}
-            >
-              Support
-            </button>
-            <button className="nav-cta text-uppercase" type="button" onClick={handleJoinAsProfessional}>
-              Join as Professional
-            </button>
+            {isMinimalNav ? (
+              <div className="nav-support-wrapper">
+                {minimalHeading() && (
+                  <div className="nav-support-heading text-start">
+                    <p className="nav-support-kicker">{minimalHeading().kicker}</p>
+                    <h2 className="nav-support-title">{minimalHeading().title}</h2>
+                  </div>
+                )}
+                <button type="button" className="dashboard-nav-link nav-support-logout" onClick={handleLogout}>
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="nav-login-menu">
+                  <button type="button" className="dashboard-nav-link nav-login-trigger" onClick={toggleLoginMenu}>
+                    Login ▼
+                  </button>
+                  {showLoginMenu && (
+                    <div className="nav-login-dropdown" onMouseLeave={closeLoginMenu}>
+                      <button onClick={() => handleNavRouteClick("/login")}>Customer Login</button>
+                      <button onClick={() => handleNavRouteClick("/staff/login")}>Staff Login</button>
+                    </div>
+                  )}
+                </div>
+                <button className="nav-cta text-uppercase" type="button" onClick={handleJoinAsProfessional}>
+                  Join as Professional
+                </button>
+                <button
+                  type="button"
+                  className={`${navLinkClass(null, "/support")} nav-support-link`}
+                  onClick={() => handleNavRouteClick("/support")}
+                  aria-current={location.pathname.startsWith("/support") ? "page" : undefined}
+                >
+                  Support
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
