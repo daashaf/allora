@@ -243,7 +243,7 @@ const ensureAuth = async () => {
     if (!provider) return;
 
     try {
-      await fetch(`${API_BASE}/provider/approve`, {
+      const response = await fetch(`${API_BASE}/provider/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -256,8 +256,15 @@ const ensureAuth = async () => {
           address: provider.address,
         }),
       });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.message || "Approval API failed");
+      }
     } catch (error) {
       console.warn("[ProviderApproval] Backend approval failed", error);
+      alert("Could not create the provider login. Please ensure the server is running and try again.");
+      return;
     }
 
     await updateProviderStatus(id, "Active");
