@@ -15,8 +15,10 @@
 }
 
 .admin-dashboard-shell {
-  width: min(1380px, 96vw);
+  width: 100%;
+  max-width: none;
   margin: 0 auto 40px;
+  padding: 0 18px;
 }
 
 .admin-main-content {
