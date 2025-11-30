@@ -242,13 +242,25 @@ const ensureAuth = async () => {
     const provider = providerRegistrations.find((p) => p.id === id);
     if (!provider) return;
 
+    let passwordToUse = provider.password;
+    if (!passwordToUse) {
+      passwordToUse = window.prompt(
+        `No password was saved for ${provider.email}. Enter a password to create their login:`,
+        ""
+      );
+      if (!passwordToUse || passwordToUse.length < 6) {
+        alert("Approval cancelled. Please provide a password (min 6 characters).");
+        return;
+      }
+    }
+
     try {
       const response = await fetch(`${API_BASE}/provider/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: provider.email,
-          password: provider.password,
+          password: passwordToUse,
           businessName: provider.businessName,
           ownerName: provider.ownerName,
           category: provider.category,
@@ -263,7 +275,7 @@ const ensureAuth = async () => {
       }
     } catch (error) {
       console.warn("[ProviderApproval] Backend approval failed", error);
-      alert("Could not create the provider login. Please ensure the server is running and try again.");
+      alert(error?.message || "Could not create the provider login. Please ensure the server is running and try again.");
       return;
     }
 
