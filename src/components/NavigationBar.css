@@ -1,0 +1,94 @@
+@import "../pages/Customer/CustomerDashboard.css";
+
+/* ---------- TOP NAV WRAPPER ---------- */
+.nav-support-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  width: 100%;
+}
+
+/* ---------- TEXT (LEFT / CENTER AREA) ---------- */
+.nav-support-kicker {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #16438a;
+}
+
+.nav-support-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0e2c63;
+}
+
+/* ---------- LOGOUT (RIGHT SIDE) ---------- */
+.nav-support-logout {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0e2c63;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.nav-support-logout:hover {
+  opacity: 1.0;
+}
+
+.nav-login-menu {
+  position: relative;
+}
+
+.nav-login-trigger {
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nav-login-dropdown {
+  position: absolute;
+  right: 0;
+  top: 110%;
+  background: #fff;
+  border: 1px solid #e4e8f1;
+  box-shadow: 0 10px 30px rgba(17, 42, 94, 0.12);
+  border-radius: 10px;
+  padding: 8px 0;
+  display: grid;
+  gap: 4px;
+  min-width: 190px;
+  z-index: 2000;
+}
+
+.nav-login-dropdown button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 14px;
+  width: 100%;
+  font-weight: 500;
+  color: #1f2a44;
+  cursor: pointer;
+}
+
+.nav-login-dropdown button:hover {
+  background: #f5f7ff;
+}
+/* Global nav wrapper to ensure content spans full row */
+.nav-actions {
+  width: 100%;
+}
+/* Center nav links */
+.navbar-nav {
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-width: 700px;
+}
