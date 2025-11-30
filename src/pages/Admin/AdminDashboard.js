@@ -730,36 +730,52 @@ const ensureAuth = async () => {
                 </div>
               </div>
 
-              <div className="admin-panel-card">
+              <div className="admin-panel-card provider-card">
                 <h4>Provider Registrations</h4>
-                <div className="activity" style={{ display: "grid", gap: 10 }}>
-                  {providerRegistrations.filter((p) => (p.status || "Pending") !== "Active").length === 0 ? (
-                    <p>No new registrations.</p>
-                  ) : (
-                    providerRegistrations
-                      .filter((p) => (p.status || "Pending") !== "Active")
-                      .slice(0, 5)
-                      .map((p) => (
-                        <div key={p.id} className="provider-registration-row">
-                          <div>
-                            <strong>{p.businessName || "Untitled"}</strong>
-                            <br />
-                            <span>{p.ownerName || "Owner"}</span> • <span>{p.category || "General"}</span>
-                            <br />
-                            <span style={{ color: "#5b6a7f", fontSize: 13 }}>{p.email || "No email"}</span>
-                          </div>
-                          <div className="provider-actions">
-                            <button className="action-btn primary" onClick={() => approveProviderRegistration(p.id)}>
-                              Approve
-                            </button>
-                            <button className="action-btn danger" onClick={() => declineProviderRegistration(p.id)}>
-                              Decline
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                  )}
-                </div>
+                {providerRegistrations.length === 0 ? (
+                  <p style={{ margin: 0 }}>No registrations yet.</p>
+                ) : (
+                  <div className="admin-table-wrapper compact">
+                    <table className="admin-table provider-table">
+                      <thead>
+                        <tr>
+                          <th>Business</th>
+                          <th>Owner</th>
+                          <th>Category</th>
+                          <th>Email</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {providerRegistrations
+                          .filter((p) => (p.status || "Pending") !== "Active")
+                          .slice(0, 8)
+                          .map((p) => (
+                            <tr key={p.id}>
+                              <td>{p.businessName || "Untitled"}</td>
+                              <td>{p.ownerName || "Owner"}</td>
+                              <td>{p.category || "General"}</td>
+                              <td>{p.email || "No email"}</td>
+                              <td>
+                                <span className={`badge ${getBadgeClass(p.status || "Pending")}`}>
+                                  {getBadgeLabel(p.status || "Pending")}
+                                </span>
+                              </td>
+                              <td className="provider-actions">
+                                <button className="action-btn primary" onClick={() => approveProviderRegistration(p.id)}>
+                                  Approve
+                                </button>
+                                <button className="action-btn danger" onClick={() => declineProviderRegistration(p.id)}>
+                                  Decline
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           </>

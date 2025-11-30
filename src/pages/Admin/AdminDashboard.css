@@ -123,6 +123,19 @@
   color: #0e2c63;
 }
 
+.provider-card .admin-table-wrapper.compact {
+  margin-top: 6px;
+}
+
+.provider-table th,
+.provider-table td {
+  font-size: 13px;
+}
+
+.provider-table th {
+  background: #f7f9ff;
+}
+
 .provider-registration-row {
   display: flex;
   justify-content: space-between;
