@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+ï»¿import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import { addServiceProvider } from "../../serviceProviderCRUD";
@@ -10,6 +10,7 @@ export default function ProviderRegistration() {
     businessName: "",
     ownerName: "",
     email: "",
+    password: "",
     phone: "",
     address: "",
     category: "Home Services",
@@ -25,7 +26,7 @@ export default function ProviderRegistration() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setMessage("");
-    if (!formData.businessName || !formData.ownerName || !formData.email) {
+    if (!formData.businessName || !formData.ownerName || !formData.email || !formData.password) {
       setMessage("Please complete the required fields.");
       return;
     }
@@ -42,6 +43,7 @@ export default function ProviderRegistration() {
         businessName: "",
         ownerName: "",
         email: "",
+        password: "",
         phone: "",
         address: "",
         category: "Home Services",
@@ -108,6 +110,20 @@ export default function ProviderRegistration() {
                   type="email"
                   placeholder="you@example.com"
                   value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="password">Password</label>
+                <input
+                  id="password"
+                  name="password"
+                  className="input"
+                  type="password"
+                  placeholder="Create a password"
+                  value={formData.password}
                   onChange={handleChange}
                   required
                 />
@@ -182,7 +198,7 @@ export default function ProviderRegistration() {
             </div>
             <p className="visual-eyebrow">ALLORA</p>
             <h2>Grow your services with Allora.</h2>
-            <p>Register your business and we’ll review your profile to get you live.</p>
+            <p>Register your business and we'll review your profile to get you live.</p>
           </div>
         </div>
       </div>
