@@ -638,7 +638,7 @@ const ensureAuth = async () => {
 
   return (
     <div className="support-page admin-dashboard-page">
-      <NavigationBar activeSection="admin" />
+      <NavigationBar activeSection="admin" notificationCount={recentNotifications.length} />
       <div className="admin-dashboard-shell">
         <main className="admin-main-content">
         <section className="admin-hero support-hero">

@@ -6,7 +6,7 @@ import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
 import { auth, db } from "../firebase";
 import "./NavigationBar.css";
 
-export default function NavigationBar({ activeSection, onSectionSelect }) {
+export default function NavigationBar({ activeSection, onSectionSelect, notificationCount = 0 }) {
   const [isNavCollapsed, setIsNavCollapsed] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
@@ -248,6 +248,11 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
                         d="M12 22a2 2 0 0 0 1.985-1.75L14 20h-4a2 2 0 0 0 1.85 1.995L12 22Zm6-6v-4.5a6 6 0 0 0-5-5.917V5a1 1 0 1 0-2 0v.583A6 6 0 0 0 6 11.5V16l-1 1v1h16v-1l-1-1Z"
                       />
                     </svg>
+                    {notificationCount > 0 && (
+                      <span className="nav-icon-badge" aria-label={`${notificationCount} notifications`}>
+                        {notificationCount}
+                      </span>
+                    )}
                   </button>
                 <button type="button" className="dashboard-nav-link nav-support-logout" onClick={handleLogout}>
                   Logout
