@@ -28,7 +28,7 @@
 
 /* ---------- LOGOUT (RIGHT SIDE) ---------- */
 .nav-support-logout {
-  margin-left: auto;
+  margin-left: 0;
   white-space: nowrap;
   font-size: 0.95rem;
   font-weight: 600;
@@ -44,7 +44,7 @@
 .nav-support-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .nav-login-menu {
