@@ -20,7 +20,7 @@
 
 .nav-brand {
   padding-left: 16px;
-  margin-left: auto;
+  margin-left: calc(50% - 120px);
 }
 /* ---------- TEXT (LEFT / CENTER AREA) ---------- */
 .nav-support-kicker {
