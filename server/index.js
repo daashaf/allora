@@ -2,12 +2,21 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const nodemailer = require("nodemailer");
+const admin = require("firebase-admin");
+const serviceAccount = require("./serviceAccountKey.json");
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 4000;
 const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id,
+});
+const authAdmin = admin.auth();
+const firestore = admin.firestore();
 
 app.use(
   cors({
@@ -173,11 +182,44 @@ Allora Support`,
   }
 });
 
-app.post("/provider/notify-approval", async (req, res) => {
-  const { email, businessName } = req.body || {};
+app.post("/provider/approve", async (req, res) => {
+  const { email, password, businessName, ownerName, category, phone, address } = req.body || {};
 
-  if (!email) {
-    return res.status(400).json({ message: "Email is required." });
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required to approve a provider." });
+  }
+
+  let userRecord;
+  try {
+    userRecord = await authAdmin.createUser({
+      email,
+      password,
+      displayName: businessName || ownerName || email,
+    });
+  } catch (error) {
+    if (error.code === "auth/email-already-exists") {
+      userRecord = await authAdmin.getUserByEmail(email);
+    } else {
+      console.error("[provider-approval] Failed to create user:", error.message);
+      return res.status(500).json({ message: "Unable to create provider login right now." });
+    }
+  }
+
+  try {
+    const userDoc = {
+      email,
+      role: "Service Provider",
+      businessName: businessName || "",
+      ownerName: ownerName || "",
+      category: category || "General",
+      phone: phone || "",
+      address: address || "",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await firestore.collection("users").doc(userRecord.uid).set(userDoc, { merge: true });
+  } catch (error) {
+    console.error("[provider-approval] Failed to write Firestore user:", error.message);
+    return res.status(500).json({ message: "User created, but unable to save profile." });
   }
 
   const safeName = businessName || "your business";
@@ -189,23 +231,23 @@ app.post("/provider/notify-approval", async (req, res) => {
 
 Good news! Your provider registration for ${safeName} has been approved.
 
-You can now sign in to the Allora Service Hub and start managing your services.
+You can now sign in to the Allora Service Hub using the email and password you registered with.
 
 Nga mihi,
 Allora Support`,
     html: `<p>Kia ora,</p>
            <p>Good news! Your provider registration for <strong>${safeName}</strong> has been approved.</p>
-           <p>You can now sign in to the <strong>Allora Service Hub</strong> and start managing your services.</p>
+           <p>You can now sign in to the <strong>Allora Service Hub</strong> using the email and password you registered with.</p>
            <p style="margin-top:20px;">Nga mihi,<br/>Allora Support</p>`,
   };
 
   try {
     await sendMailWithTimeout(mailPayload);
-    return res.json({ message: "Approval email sent." });
   } catch (error) {
-    console.error("[provider-approval] Failed to send approval email:", error.message);
-    return res.status(500).json({ message: "Unable to send approval email right now." });
+    console.warn("[provider-approval] User created, email failed:", error.message);
   }
+
+  return res.json({ message: "Provider approved.", uid: userRecord.uid });
 });
 
 app.listen(port, () => {

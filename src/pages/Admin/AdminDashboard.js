@@ -240,10 +240,28 @@ const ensureAuth = async () => {
 
   const approveProviderRegistration = async (id) => {
     const provider = providerRegistrations.find((p) => p.id === id);
-    await updateProviderStatus(id, "Active");
-    if (provider) {
-      notifyProviderApproval(provider);
+    if (!provider) return;
+
+    try {
+      await fetch(`${API_BASE}/provider/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: provider.email,
+          password: provider.password,
+          businessName: provider.businessName,
+          ownerName: provider.ownerName,
+          category: provider.category,
+          phone: provider.phone,
+          address: provider.address,
+        }),
+      });
+    } catch (error) {
+      console.warn("[ProviderApproval] Backend approval failed", error);
     }
+
+    await updateProviderStatus(id, "Active");
+    notifyProviderApproval(provider);
   };
 
   const declineProviderRegistration = (id) => updateProviderStatus(id, "Declined");
