@@ -15,6 +15,7 @@ import {
 import { auth, db, ensureFirebaseAuth } from "../../firebase";
 import { useNavigate } from "react-router-dom";
 import NavigationBar from "../../components/NavigationBar";
+import { getServiceProviders, updateServiceProvider } from "../../serviceProviderCRUD";
 import "./AdminDashboard.css";
 
 const defaultSettings = {
@@ -154,6 +155,7 @@ const ensureAuth = async () => {
   const [services, setServices] = useState([]);
   const [listings, setListings] = useState([]);
   const [serviceView, setServiceView] = useState("Manage Services");
+  const [providerRegistrations, setProviderRegistrations] = useState([]);
 
   useEffect(() => {
     if (!db) return undefined;
@@ -162,6 +164,16 @@ const ensureAuth = async () => {
       setServices(docs);
       setListings(docs);
     });
+  }, []);
+
+  // Service Provider registrations (local store)
+  const refreshProviderRegistrations = async () => {
+    const list = await getServiceProviders();
+    setProviderRegistrations(list);
+  };
+
+  useEffect(() => {
+    refreshProviderRegistrations();
   }, []);
 
   const updateServiceStatus = async (serviceId, status) => {
@@ -196,6 +208,15 @@ const ensureAuth = async () => {
       alert("Unable to delete the service. Please try again.");
     }
   };
+
+  // Provider registration review (local store)
+  const updateProviderStatus = async (id, status) => {
+    await updateServiceProvider(id, { status });
+    refreshProviderRegistrations();
+  };
+
+  const approveProviderRegistration = (id) => updateProviderStatus(id, "Active");
+  const declineProviderRegistration = (id) => updateProviderStatus(id, "Declined");
 
   const approveListing = async (serviceId) => {
     await updateServiceStatus(serviceId, "Approved");
@@ -710,6 +731,38 @@ const ensureAuth = async () => {
                         {service.service || "Service"} ??? {service.status || "Pending"}
                       </p>
                     ))
+                  )}
+                </div>
+              </div>
+
+              <div className="admin-panel-card">
+                <h4>Provider Registrations</h4>
+                <div className="activity" style={{ display: "grid", gap: 10 }}>
+                  {providerRegistrations.filter((p) => (p.status || "Pending") !== "Active").length === 0 ? (
+                    <p>No new registrations.</p>
+                  ) : (
+                    providerRegistrations
+                      .filter((p) => (p.status || "Pending") !== "Active")
+                      .slice(0, 5)
+                      .map((p) => (
+                        <div key={p.id} className="provider-registration-row">
+                          <div>
+                            <strong>{p.businessName || "Untitled"}</strong>
+                            <br />
+                            <span>{p.ownerName || "Owner"}</span> • <span>{p.category || "General"}</span>
+                            <br />
+                            <span style={{ color: "#5b6a7f", fontSize: 13 }}>{p.email || "No email"}</span>
+                          </div>
+                          <div className="provider-actions">
+                            <button className="action-btn primary" onClick={() => approveProviderRegistration(p.id)}>
+                              Approve
+                            </button>
+                            <button className="action-btn danger" onClick={() => declineProviderRegistration(p.id)}>
+                              Decline
+                            </button>
+                          </div>
+                        </div>
+                      ))
                   )}
                 </div>
               </div>

@@ -130,6 +130,25 @@
   color: #0e2c63;
 }
 
+.provider-registration-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef2f8;
+}
+
+.provider-registration-row:last-child {
+  border-bottom: none;
+}
+
+.provider-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .admin-section-card {
   background: #ffffff;
   border-radius: 16px;
