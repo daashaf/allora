@@ -15,7 +15,7 @@
 .dashboard-nav .container-fluid {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 18px;
   padding-left: 32px;
   padding-right: 24px;
@@ -24,7 +24,8 @@
 
 .nav-brand {
   padding-left: 0;
-  margin: 0;
+  margin-left: auto;
+  margin-right: 32px;
 }
 /* ---------- TEXT (LEFT / CENTER AREA) ---------- */
 .nav-support-kicker {
