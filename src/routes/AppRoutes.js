@@ -18,6 +18,7 @@ import ForgotPassword from "../pages/Admin/ForgotPassword";
 import StaffLogin from "../pages/Admin/StaffLogin";
 import ProviderDashboard from "../pages/ServiceProvider/ProviderDashboard";
 import ProviderLogin from "../pages/ServiceProvider/ProviderLogin";
+import ProviderRegistration from "../pages/ServiceProvider/ProviderRegistration";
 import AgentLogin from "../pages/Support/AgentLogin";
 import { RoleProtectedRoute } from "./ProtectedRoutes";
 
@@ -37,6 +38,7 @@ export default function AppRoutes() {
         <Route path="/help" element={<PublicSupportPage />} />
         <Route path="/get-started" element={<GetStarted />} />
         <Route path="/staff/login" element={<StaffLogin />} />
+        <Route path="/provider/register" element={<ProviderRegistration />} />
         <Route path="/provider/login" element={<ProviderLogin />} />
         <Route path="/agent/login" element={<AgentLogin />} />
         <Route path="/support/login" element={<AgentLogin />} />

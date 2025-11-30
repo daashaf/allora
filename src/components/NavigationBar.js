@@ -38,7 +38,7 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
 
   const handleJoinAsProfessional = () => {
     setIsNavCollapsed(true);
-    navigate("/provider/login", { state: { role: "Service Provider" } });
+    navigate("/provider/register", { state: { role: "Service Provider" } });
   };
 
   const handleLogout = async () => {
