@@ -93,11 +93,11 @@
 }
 
 .nav-icon-btn {
-  border: 1px solid #d9e4ff;
-  background: #fff;
-  color: #0e2c63;
-  border-radius: 12px;
-  padding: 8px;
+  border: 1.5px solid #b8ccff;
+  background: #f2f6ff;
+  color: #0b3da8;
+  border-radius: 14px;
+  padding: 10px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -106,7 +106,7 @@
 }
 
 .nav-icon-btn:hover {
-  box-shadow: 0 10px 26px rgba(17, 42, 94, 0.18);
+  box-shadow: 0 12px 28px rgba(17, 42, 94, 0.2);
   transform: translateY(-1px);
   color: #0f6bff;
 }
