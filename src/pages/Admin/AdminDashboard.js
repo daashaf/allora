@@ -643,7 +643,6 @@ const ensureAuth = async () => {
         <main className="admin-main-content">
         <section className="admin-hero support-hero">
           <div>
-            <p className="clean-label subtle">Admin workspace</p>
             <h2>Operations Control</h2>
             <p className="support-hero-copy">
               Monitor users, services, notifications, and tickets in one place.
