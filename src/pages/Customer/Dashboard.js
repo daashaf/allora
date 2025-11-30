@@ -26,6 +26,21 @@ const UPCOMING_BOOKINGS = [
   },
 ];
 
+const CUSTOMER_JOURNEY_STEPS = [
+  {
+    title: "Share your job",
+    copy: "Add location, timing, and budget (or drop photos). Intake takes under a minute.",
+  },
+  {
+    title: "Review vetted pros",
+    copy: "Within an hour we send 3–5 verified providers with pricing, reviews, and availability.",
+  },
+  {
+    title: "Book, track, and pay",
+    copy: "Approve milestones, chat in one thread, and pay once work is done—Allora monitors the timeline.",
+  },
+];
+
 export default function CustomerDashboard() {
   const [userEmail, setUserEmail] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
@@ -215,6 +230,22 @@ export default function CustomerDashboard() {
                   <span className={`booking-status status-${booking.status.replace(/\s+/g, "-")}`}>
                     {booking.status}
                   </span>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="clean-steps">
+            <div className="clean-section-heading">
+              <h2>How Allora works</h2>
+              <p>Clear steps from request to completion, with support watching the timeline.</p>
+            </div>
+            <div className="clean-steps-grid">
+              {CUSTOMER_JOURNEY_STEPS.map((step, index) => (
+                <article key={step.title}>
+                  <span>{`0${index + 1}`}</span>
+                  <h3>{step.title}</h3>
+                  <p>{step.copy}</p>
                 </article>
               ))}
             </div>
