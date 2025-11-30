@@ -667,6 +667,21 @@ const ensureAuth = async () => {
               </button>
             ))}
           </div>
+          <div className="admin-hero-actions">
+            <button
+              type="button"
+              className="notification-btn"
+              onClick={() => {
+                const panel = document.getElementById("admin-notifications-panel");
+                if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              Notifications
+            </button>
+            <button className="logout-top" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
         </div>
 
         {activeSection === "Dashboard" ? (
@@ -682,7 +697,7 @@ const ensureAuth = async () => {
             </div>
 
             <div className="admin-panel-grid">
-              <div className="admin-panel-card">
+              <div className="admin-panel-card" id="admin-notifications-panel">
                 <h4>Recent Notifications</h4>
                 <div className="activity">
                   {recentNotifications.length === 0 ? (
