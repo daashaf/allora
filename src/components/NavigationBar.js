@@ -234,9 +234,25 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
                     <h2 className="nav-support-title">{minimalHeading().title}</h2>
                   </div>
                 )}
+                <div className="nav-support-actions">
+                  <button
+                    type="button"
+                    className="nav-icon-btn"
+                    aria-label="Notifications"
+                    onClick={scrollToNotifications}
+                    title="Notifications"
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+                      <path
+                        fill="currentColor"
+                        d="M12 22a2 2 0 0 0 1.985-1.75L14 20h-4a2 2 0 0 0 1.85 1.995L12 22Zm6-6v-4.5a6 6 0 0 0-5-5.917V5a1 1 0 1 0-2 0v.583A6 6 0 0 0 6 11.5V16l-1 1v1h16v-1l-1-1Z"
+                      />
+                    </svg>
+                  </button>
                 <button type="button" className="dashboard-nav-link nav-support-logout" onClick={handleLogout}>
                   Logout
                 </button>
+                </div>
               </div>
             ) : (
               <>

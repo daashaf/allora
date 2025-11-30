@@ -40,6 +40,13 @@
   opacity: 1.0;
 }
 
+.nav-support-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
 .nav-login-menu {
   position: relative;
 }
