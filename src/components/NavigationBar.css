@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 12px;
   width: 100%;
 }
 
@@ -23,9 +23,10 @@
 /* ---------- TEXT (LEFT / CENTER AREA) ---------- */
 .nav-support-kicker {
   margin: 0;
+  margin-right: -190px;
   font-size: 0.9rem;
   font-weight: 700;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
   color: #16438a;
 }
 
@@ -39,7 +40,8 @@
 
 /* ---------- LOGOUT (RIGHT SIDE) ---------- */
 .nav-support-logout {
-  margin-left: 100px;
+  margin-left: 20px;
+  margin-right: -190px; 
   white-space: nowrap;
   font-size: 0.95rem;
   font-weight: 600;
