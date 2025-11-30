@@ -14,6 +14,26 @@
   --allora-border: #E5E7EB;
 }
 
+.provider-dashboard-page .dashboard-page {
+  align-items: stretch;
+}
+
+.provider-dashboard-page .dashboard-wrapper {
+  width: 100%;
+}
+
+.provider-dashboard-page .dashboard-header,
+.provider-dashboard-page .dashboard-content {
+  width: 100%;
+  max-width: 100%;
+}
+
+.provider-dashboard-page .dashboard-header .container-fluid,
+.provider-dashboard-page .dashboard-content {
+  padding-left: clamp(16px, 4vw, 48px);
+  padding-right: clamp(16px, 4vw, 48px);
+}
+
 .dashboard-wrapper {
   min-height: 100vh;
   background: linear-gradient(180deg, #F9FAFB 0%, #F3F4F6 100%);

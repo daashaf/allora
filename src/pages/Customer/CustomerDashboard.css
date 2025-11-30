@@ -33,7 +33,7 @@
   overflow-y: visible;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch; /* allow full-bleed sections */
   padding-top: 0;
 }
 
@@ -1427,9 +1427,9 @@
   padding: 32px clamp(20px, 5vw, 96px) 80px;
   display: grid;
   gap: 60px;
-  max-width: 1400px;
+  max-width: 100vw;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   position: relative;
   z-index: 2;
 }
@@ -1441,10 +1441,146 @@
   align-items: start;
   max-width: 1100px;
   margin: 0 auto;
+  min-height: calc(100vh - 140px); /* fill the first fold */
+  align-items: center;
 }
 
 .customer-page .clean-cta {
   padding: 0 min(6vw, 96px) 70px;
+  margin-top: 80px;
+}
+
+.modern-steps {
+  padding: 0 min(6vw, 96px) 80px;
+  margin-top: 40px;
+}
+
+.modern-steps-shell {
+  background: radial-gradient(140% 140% at 12% 18%, rgba(79, 122, 255, 0.14), rgba(255, 255, 255, 0.96)),
+    linear-gradient(160deg, rgba(15, 79, 171, 0.08), rgba(79, 122, 255, 0.06) 50%, rgba(255, 255, 255, 0.95));
+  border-radius: 32px;
+  border: 1px solid rgba(17, 52, 130, 0.08);
+  box-shadow: 0 50px 120px rgba(12, 30, 76, 0.16);
+  padding: clamp(20px, 4vw, 36px);
+}
+
+.modern-steps-header {
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+
+.modern-steps-kicker {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #1f4fff;
+}
+
+.modern-steps-header h2 {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.2rem);
+  color: #0a1230;
+}
+
+.modern-steps-header p {
+  margin: 0;
+  color: #2f3c63;
+}
+
+.modern-steps-track {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 20px;
+  padding: 10px;
+}
+
+.modern-step {
+  position: relative;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(31, 79, 255, 0.12);
+  display: grid;
+  gap: 12px;
+  min-height: 220px;
+  overflow: hidden;
+  grid-template-columns: 160px 1fr;
+  align-items: center;
+}
+
+.modern-step::after {
+  content: "";
+  position: absolute;
+  right: -12px;
+  top: 28px;
+  width: 36px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(31, 79, 255, 0.6), rgba(31, 79, 255, 0));
+}
+
+.modern-step:last-child::after {
+  display: none;
+}
+
+.modern-step-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.72), rgba(31, 79, 255, 0.2));
+  color: #1f4fff;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.modern-step-body h3 {
+  margin: 0;
+  color: #0a1230;
+  font-size: 1.2rem;
+}
+
+.modern-step-body p {
+  margin: 0;
+  color: #2f3c63;
+  line-height: 1.55;
+}
+
+.modern-step-visual {
+  width: 140px;
+  height: 140px;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 18px 42px rgba(12, 30, 76, 0.22);
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+}
+
+.modern-step-visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(0, 0, 0, 0.05), transparent 60%);
+  pointer-events: none;
+}
+
+.modern-step-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.modern-step:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 32px 70px rgba(12, 30, 76, 0.2);
+  border-color: rgba(31, 79, 255, 0.22);
 }
 
 .customer-page .clean-cta-card {
@@ -1467,13 +1603,16 @@
 }
 
 .customer-page .clean-hero-left h1 {
+  font-size: clamp(2.6rem, 5vw, 3.9rem);
+  line-height: 1.08;
   margin-bottom: 8px;
 }
 
 .customer-page .clean-hero-left p {
   margin: 0;
   color: #2f3c63;
-  line-height: 1.7;
+  line-height: 1.8;
+  font-size: clamp(1rem, 1.2vw, 1.15rem);
 }
 
 .customer-page .clean-popular {
@@ -1498,16 +1637,18 @@
   border-radius: 999px;
   background: rgba(68, 114, 210, 0.12);
   color: #1f4fff;
-  font-size: 0.9rem;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .customer-page .clean-hero-form {
   background: rgba(255, 255, 255, 0.94);
   border-radius: 28px;
-  padding: clamp(20px, 4vw, 32px);
+  padding: clamp(24px, 4.5vw, 40px);
   box-shadow: 0 32px 70px rgba(12, 30, 76, 0.14);
   display: grid;
   gap: 18px;
+  max-width: 520px;
 }
 
 .customer-page .clean-form-field {
@@ -1534,7 +1675,8 @@
 }
 
 .customer-page .clean-hero-form button {
-  padding: 12px 18px;
+  padding: 14px 20px;
+  font-size: 1.05rem;
   border-radius: 18px;
   border: none;
   font-weight: 600;
@@ -1573,6 +1715,7 @@
 .customer-page .clean-steps {
   display: grid;
   gap: 24px;
+  margin-top: 80px; /* push the section lower on the page */
 }
 
 .customer-page .clean-highlights {
@@ -1633,10 +1776,12 @@
 .customer-page .clean-service-card {
   border-radius: 30px;
   overflow: hidden;
-  background: #fff;
-  box-shadow: 0 34px 90px rgba(12, 30, 76, 0.16);
-  display: flex;
-  flex-direction: column;
+  background: radial-gradient(140% 140% at 20% 20%, rgba(79, 122, 255, 0.12), #ffffff);
+  box-shadow: 0 32px 80px rgba(12, 30, 76, 0.2);
+  display: grid;
+  grid-template-rows: 200px 1fr;
+  border: 1px solid rgba(31, 79, 255, 0.12);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
 }
 
 .customer-page .clean-service-card img {
@@ -1645,10 +1790,17 @@
   object-fit: cover;
 }
 
+.customer-page .clean-service-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 44px 110px rgba(12, 30, 76, 0.26);
+  border-color: rgba(31, 79, 255, 0.24);
+}
+
 .customer-page .clean-service-body {
   padding: 20px;
   display: grid;
   gap: 8px;
+  height: 100%;
 }
 
 .customer-page .clean-service-body span {
@@ -1661,25 +1813,33 @@
 
 .customer-page .clean-service-body h3 {
   margin: 0;
+  font-size: 1.25rem;
   color: #0a1230;
 }
 
 .customer-page .clean-service-body p {
   margin: 0;
   color: #2f3c63;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .customer-page .clean-service-body button {
-  margin-top: 8px;
+  margin-top: auto;
   justify-self: flex-start;
   padding: 10px 18px;
   border-radius: 16px;
   border: 1px solid rgba(31, 79, 255, 0.3);
-  background: transparent;
-  color: #1f4fff;
-  font-weight: 600;
+  background: linear-gradient(135deg, #1f4fff, #4f7aff);
+  color: #fff;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 18px 40px rgba(31, 79, 255, 0.25);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.customer-page .clean-service-body button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 56px rgba(31, 79, 255, 0.28);
 }
 
 .customer-page .clean-steps-grid {

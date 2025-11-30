@@ -510,7 +510,7 @@ export default function ServiceProviderDashboard() {
   const availableServices = services.filter(s => s.available).length;
 
   return (
-    <div className="customer-page">
+    <div className="customer-page provider-dashboard-page">
       <div className="dashboard-page">
         <NavigationBar />
         <div className="dashboard-wrapper">
@@ -651,21 +651,7 @@ export default function ServiceProviderDashboard() {
 
             {/* Quick Actions */}
             <Row className="g-4 mb-4">
-              <Col md={6}>
-                <Card className="action-card">
-                  <Card.Body>
-                    <div className="action-icon bg-success">
-                      <i className="bi bi-person-plus-fill"></i>
-                    </div>
-                    <h4>Join as Service Provider</h4>
-                    <p className="text-muted">Register your business and start offering services to customers</p>
-                    <Button variant="success" size="lg" onClick={handleAddProvider} className="action-button">
-                      Register Now <i className="bi bi-arrow-right"></i>
-                    </Button>
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col md={6}>
+              <Col lg={6} md={12}>
                 <Card className="action-card">
                   <Card.Body>
                     <div className="action-icon bg-primary">
@@ -722,6 +708,14 @@ export default function ServiceProviderDashboard() {
                 </Card>
               </Col>
             </Row>
+
+            {/* Analytics Snapshot inside overview */}
+            <div className="mt-5">
+              <AnalyticsSection 
+                providers={providers}
+                services={services}
+              />
+            </div>
           </>
         )}
 

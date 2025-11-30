@@ -5,27 +5,48 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 30px;
-  width: 100%;
+  gap: 20px;
+  width: auto;
+  margin-left: auto;
 }
 
 .dashboard-nav {
   padding: 8px 0;
+  padding-left: 8px !important;
+  padding-right: 16px !important;
+  margin-left: 0;
+  margin-right: 0;
 }
 .dashboard-nav .container-fluid {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 18px;
-  padding-left: 0;
-  padding-right: 0;
-  max-width: none;
+  padding-left: 0 !important;
+  padding-right: 16px !important;
+  max-width: none !important;
+  margin: 0 !important;
+  flex-wrap: wrap;
 }
 
 .nav-brand {
-  padding-right: 110px;
-  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding-right: 0;
+  margin-left: 32px !important;
   margin-right: 0;
+  order: 1;
+}
+
+.dashboard-nav .navbar-toggler {
+  order: 2;
+}
+
+.dashboard-nav .navbar-collapse {
+  order: 3;
+  flex: 1 1 auto;
 }
 /* ---------- TEXT (LEFT / CENTER AREA) ---------- */
 .nav-support-kicker {
@@ -47,8 +68,8 @@
 
 /* ---------- LOGOUT (RIGHT SIDE) ---------- */
 .nav-support-logout {
-  margin-left: 30px;
-  margin-right: -200px; 
+  margin-left: 14px;
+  margin-right: 0;
   white-space: nowrap;
   font-size: 0.95rem;
   font-weight: 600;
@@ -64,7 +85,7 @@
 .nav-support-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
 }
 
 .nav-login-menu {
@@ -109,7 +130,8 @@
 }
 /* Global nav wrapper to ensure content spans full row */
 .nav-actions {
-  width: 100%;
+  width: auto;
+  margin-left: auto;
 }
 
 .nav-icon-btn {

@@ -36,7 +36,7 @@ const demoServices = [
     title: "Event Photography",
     description: "Capture celebrations with cinematic storytelling.",
     image:
-      "https://images.unsplash.com/photo-1518895949257-7621c3c786d4?auto=format&fit=crop&w=800&q=80",
+      "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=900&q=80",
     category: "Events & Entertainment",
   },
   {
@@ -65,6 +65,9 @@ const SERVICE_TYPES = [
   "Dog Walker",
 ];
 
+const FALLBACK_SERVICE_IMAGE =
+  "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=900&q=80";
+
 const featureCards = [
   {
     title: "City curators",
@@ -82,16 +85,19 @@ const featureCards = [
 
 const journeySteps = [
   {
-    title: "Tell us the task",
-    copy: "Share a few details or upload a quick photo. We keep intake light but useful.",
+    title: "Share your job",
+    copy: "Add location, timing, and budget (or drop photos). Intake takes under a minute.",
+    visual: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=900&q=80",
   },
   {
-    title: "Review curated matches",
-    copy: "Within an hour you'll receive tailored pros with transparent pricing and availability.",
+    title: "Review vetted pros",
+    copy: "Within an hour we send 3–5 verified providers with pricing, reviews, and availability.",
+    visual: "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=900&q=80",
   },
   {
-    title: "Book and relax",
-    copy: "Track milestones, message securely, and rely on Allora support if anything drifts.",
+    title: "Book, track, and pay",
+    copy: "Approve milestones, chat in one thread, and pay once work is done—Allora monitors the timeline.",
+    visual: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=900&q=80",
   },
 ];
 
@@ -130,6 +136,13 @@ export default function DiscoverLanding() {
     navigate("/services", { state: { prefill: serviceType } });
   };
 
+  const handleServiceImageError = (event) => {
+    if (!event?.currentTarget) return;
+    if (event.currentTarget.dataset.fallbackApplied === "true") return;
+    event.currentTarget.dataset.fallbackApplied = "true";
+    event.currentTarget.src = FALLBACK_SERVICE_IMAGE;
+  };
+
   const handleHeroSubmit = (event) => {
     event.preventDefault();
     handleServiceTypeSelect(selectedService);
@@ -146,7 +159,6 @@ export default function DiscoverLanding() {
         <main className="clean-main">
           <section className="clean-hero" id="discover">
             <div className="clean-hero-left">
-              <p className="clean-label">Curated & local</p>
               <h1>Find trusted professionals without scrolling through noise.</h1>
               <p>
                 Allora pairs neighbourhood expertise with modern tooling so you can browse, book, and track services from
@@ -194,21 +206,6 @@ export default function DiscoverLanding() {
             </form>
           </section>
 
-          <section className="clean-highlights">
-            <div className="clean-section-heading">
-              <h2>The Allora promise</h2>
-              <p>We keep the experience warm, transparent, and reliably on time.</p>
-            </div>
-            <div className="clean-highlights-grid">
-              {featureCards.map((card) => (
-                <article key={card.title}>
-                  <h3>{card.title}</h3>
-                  <p>{card.copy}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-
           <section className="clean-services" aria-label="Featured services">
             <div className="clean-section-heading">
               <h2>Fresh from the concierge desk</h2>
@@ -217,7 +214,12 @@ export default function DiscoverLanding() {
             <div className="clean-services-grid">
               {demoServices.map((service) => (
                 <article key={service.title} className="clean-service-card">
-                  <img src={service.image} alt={service.title} loading="lazy" />
+                  <img
+                    src={service.image}
+                    alt={service.title}
+                    loading="lazy"
+                    onError={handleServiceImageError}
+                  />
                   <div className="clean-service-body">
                     <span>{service.category}</span>
                     <h3>{service.title}</h3>
@@ -226,22 +228,6 @@ export default function DiscoverLanding() {
                       Book now
                     </button>
                   </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="clean-steps">
-            <div className="clean-section-heading">
-              <h2>How it works</h2>
-              <p>Three friendly steps from idea to completed service.</p>
-            </div>
-            <div className="clean-steps-grid">
-              {journeySteps.map((step, index) => (
-                <article key={step.title}>
-                  <span>{`0${index + 1}`}</span>
-                  <h3>{step.title}</h3>
-                  <p>{step.copy}</p>
                 </article>
               ))}
             </div>
@@ -264,6 +250,30 @@ export default function DiscoverLanding() {
                 <button type="button" className="ghost" onClick={() => navigate("/support")}>
                   Talk to support
                 </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="modern-steps" aria-label="How Allora works">
+            <div className="modern-steps-shell">
+              <div className="modern-steps-header">
+                <p className="modern-steps-kicker">How it works</p>
+                <h2>From request to done</h2>
+                <p>Track a simple path with Allora watching every milestone.</p>
+              </div>
+              <div className="modern-steps-track">
+                {journeySteps.map((step, index) => (
+                  <article key={step.title} className="modern-step">
+                    <div className="modern-step-visual">
+                      <img src={step.visual} alt={step.title} loading="lazy" />
+                    </div>
+                    <div className="modern-step-body">
+                      <div className="modern-step-badge">{`0${index + 1}`}</div>
+                      <h3>{step.title}</h3>
+                      <p>{step.copy}</p>
+                    </div>
+                  </article>
+                ))}
               </div>
             </div>
           </section>

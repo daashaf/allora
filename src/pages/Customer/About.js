@@ -64,9 +64,19 @@ const storyImage =
   "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1100&q=80";
 
 const opsImage =
-  "https://images.unsplash.com/photo-1521737604893-ff4dc1d56d1f?auto=format&fit=crop&w=1100&q=80";
+  "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1100&q=80";
+
+const ABOUT_FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1200&q=80";
 
 export default function About() {
+  const handleAboutImageError = (event) => {
+    if (!event?.currentTarget) return;
+    if (event.currentTarget.dataset.fallbackApplied === "true") return;
+    event.currentTarget.dataset.fallbackApplied = "true";
+    event.currentTarget.src = ABOUT_FALLBACK_IMAGE;
+  };
+
   return (
     <div className="about-page">
       <div className="about-blob about-blob-one" aria-hidden="true" />
@@ -143,7 +153,12 @@ export default function About() {
             </div>
 
             <div className="about-hero-visual">
-              <img src={heroImage} alt="Allora concierge and provider on a call" loading="lazy" />
+              <img
+                src={heroImage}
+                alt="Allora concierge and provider on a call"
+                loading="lazy"
+                onError={handleAboutImageError}
+              />
               <div className="about-hero-chip">
                 <p>"We keep the thread human while software does the heavy lifting."</p>
                 <span>Sahana - Concierge Lead</span>
@@ -189,7 +204,12 @@ export default function About() {
 
         <section className="about-story">
           <div className="about-story-media">
-            <img src={storyImage} alt="Allora team planning a service rollout" loading="lazy" />
+            <img
+              src={storyImage}
+              alt="Allora team planning a service rollout"
+              loading="lazy"
+              onError={handleAboutImageError}
+            />
           </div>
           <div className="about-story-copy">
             <p className="about-tag subtle">Our story</p>
@@ -249,7 +269,12 @@ export default function About() {
               </div>
             </div>
             <div className="about-ops-media">
-              <img src={opsImage} alt="Ops team reviewing live service timelines" loading="lazy" />
+              <img
+                src={opsImage}
+                alt="Ops team reviewing live service timelines"
+                loading="lazy"
+                onError={handleAboutImageError}
+              />
               <div className="about-ops-meter">
                 <div className="about-ops-meter-head">
                   <p>Service health</p>

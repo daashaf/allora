@@ -47,6 +47,34 @@
   margin: 16px 0 8px;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-pill-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.pill-back-btn {
+  background: #ffffff;
+  border: 1px solid #d9e4ff;
+  color: #0e2c63;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(17, 42, 94, 0.12);
+  transition: all 0.16s ease;
+}
+
+.pill-back-btn:hover {
+  box-shadow: 0 8px 20px rgba(17, 42, 94, 0.18);
+  transform: translateY(-1px);
 }
 
 .pill-btn {
@@ -531,7 +559,8 @@
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
   padding: 25px;
-  max-width: 1000px;
+  max-width: none;
+  width: 100%;
   position: relative; /* allow top-right actions */
 }
 
@@ -864,6 +893,52 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px 16px;
+}
+
+.notification-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.notification-compose .settings-grid {
+  width: 100%;
+  row-gap: 16px;
+}
+
+.notification-compose .header-actions {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.notification-compose .admin-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notification-compose .admin-form-group label {
+  font-weight: 600;
+  color: #333;
+}
+
+.notification-compose .admin-form-group input,
+.notification-compose .admin-form-group textarea,
+.notification-compose .admin-form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d6d6d6;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.notification-compose .admin-form-group textarea {
+  min-height: 140px;
+  resize: vertical;
 }
 
 .admin-page .admin-form-group {
