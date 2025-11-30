@@ -9,15 +9,13 @@
   width: 100%;
 }
 
-.dashboard-nav .container-fluid {
-  padding-left: 6px;
-  padding-right: 6px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
 .dashboard-nav {
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding: 4px 8px;
+}
+.dashboard-nav .container-fluid {
+  padding-left: 8px;
+  padding-right: 8px;
+  max-width: none;
 }
 
 /* ---------- TEXT (LEFT / CENTER AREA) ---------- */
