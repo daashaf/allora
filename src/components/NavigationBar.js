@@ -6,7 +6,7 @@ import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
 import { auth, db } from "../firebase";
 import "./NavigationBar.css";
 
-export default function NavigationBar({ activeSection, onSectionSelect }) {
+export default function NavigationBar({ activeSection, onSectionSelect, notificationCount = 0 }) {
   const [isNavCollapsed, setIsNavCollapsed] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
@@ -38,7 +38,21 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
 
   const handleJoinAsProfessional = () => {
     setIsNavCollapsed(true);
-    navigate("/provider/login", { state: { role: "Service Provider" } });
+    navigate("/provider/register", { state: { role: "Service Provider" } });
+  };
+
+  const scrollToNotifications = () => {
+    setIsNavCollapsed(true);
+    if (isAdminView) {
+      navigate("/admin/dashboard?target=providers");
+      return;
+    }
+    const panel = document.getElementById("admin-notifications-panel");
+    if (panel) {
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      navigate("/admin/dashboard");
+    }
   };
 
   const handleLogout = async () => {
@@ -224,15 +238,36 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
                     <h2 className="nav-support-title">{minimalHeading().title}</h2>
                   </div>
                 )}
+                <div className="nav-support-actions">
+                  <button
+                    type="button"
+                    className="nav-icon-btn"
+                    aria-label="Notifications"
+                    onClick={scrollToNotifications}
+                    title="Notifications"
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+                      <path
+                        fill="currentColor"
+                        d="M12 22a2 2 0 0 0 1.985-1.75L14 20h-4a2 2 0 0 0 1.85 1.995L12 22Zm6-6v-4.5a6 6 0 0 0-5-5.917V5a1 1 0 1 0-2 0v.583A6 6 0 0 0 6 11.5V16l-1 1v1h16v-1l-1-1Z"
+                      />
+                    </svg>
+                    {notificationCount > 0 && (
+                      <span className="nav-icon-badge" aria-label={`${notificationCount} notifications`}>
+                        {notificationCount}
+                      </span>
+                    )}
+                  </button>
                 <button type="button" className="dashboard-nav-link nav-support-logout" onClick={handleLogout}>
                   Logout
                 </button>
+                </div>
               </div>
             ) : (
               <>
                 <div className="nav-login-menu">
                   <button type="button" className="dashboard-nav-link nav-login-trigger" onClick={toggleLoginMenu}>
-                    Login ▼
+                    Login v
                   </button>
                   {showLoginMenu && (
                     <div className="nav-login-dropdown" onMouseLeave={closeLoginMenu}>
@@ -243,6 +278,20 @@ export default function NavigationBar({ activeSection, onSectionSelect }) {
                 </div>
                 <button className="nav-cta text-uppercase" type="button" onClick={handleJoinAsProfessional}>
                   Join as Professional
+                </button>
+                <button
+                  type="button"
+                  className="nav-icon-btn"
+                  aria-label="Notifications"
+                  onClick={scrollToNotifications}
+                  title="Notifications"
+                >
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                    <path
+                      fill="currentColor"
+                      d="M12 22a2 2 0 0 0 1.985-1.75L14 20h-4a2 2 0 0 0 1.85 1.995L12 22Zm6-6v-4.5a6 6 0 0 0-5-5.917V5a1 1 0 1 0-2 0v.583A6 6 0 0 0 6 11.5V16l-1 1v1h16v-1l-1-1Z"
+                    />
+                  </svg>
                 </button>
                 <button
                   type="button"

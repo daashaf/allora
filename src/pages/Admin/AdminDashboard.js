@@ -13,9 +13,12 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { auth, db, ensureFirebaseAuth } from "../../firebase";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import NavigationBar from "../../components/NavigationBar";
+import { getServiceProviders, updateServiceProvider } from "../../serviceProviderCRUD";
 import "./AdminDashboard.css";
+
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
 
 const defaultSettings = {
   siteName: "Allora Service Hub",
@@ -29,6 +32,7 @@ export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("Dashboard");
   const [userMgmtTab, setUserMgmtTab] = useState("Customer");
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = async () => {
     if (!window.confirm("Log out of the admin dashboard?")) return;
@@ -154,6 +158,14 @@ const ensureAuth = async () => {
   const [services, setServices] = useState([]);
   const [listings, setListings] = useState([]);
   const [serviceView, setServiceView] = useState("Manage Services");
+  const [providerRegistrations, setProviderRegistrations] = useState([]);
+  const [activePanel, setActivePanel] = useState("notifications");
+  const pendingProviders = useMemo(() => {
+    return providerRegistrations.filter((p) => {
+      const normalized = getBadgeLabel(p.status || "Pending");
+      return normalized.toLowerCase() === "pending";
+    });
+  }, [providerRegistrations]);
 
   useEffect(() => {
     if (!db) return undefined;
@@ -163,6 +175,32 @@ const ensureAuth = async () => {
       setListings(docs);
     });
   }, []);
+
+  // Service Provider registrations (local store)
+  const refreshProviderRegistrations = async () => {
+    const list = await getServiceProviders();
+    setProviderRegistrations(list);
+  };
+
+  useEffect(() => {
+    refreshProviderRegistrations();
+  }, []);
+
+  // Deep link into dashboard panels (e.g., from nav bell)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const target = params.get("target");
+    if (target === "providers") {
+      setActiveSection("Dashboard");
+      setActivePanel("providers");
+      setTimeout(() => {
+        const el = document.getElementById("admin-provider-panel");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 50);
+    }
+  }, [location.search]);
 
   const updateServiceStatus = async (serviceId, status) => {
     if (!db) return;
@@ -196,6 +234,79 @@ const ensureAuth = async () => {
       alert("Unable to delete the service. Please try again.");
     }
   };
+
+  // Provider registration review (local store)
+  const updateProviderStatus = async (id, status) => {
+    await updateServiceProvider(id, { status });
+    refreshProviderRegistrations();
+  };
+
+  const notifyProviderApproval = async (provider) => {
+    if (!provider?.email) return;
+    try {
+      const response = await fetch(`${API_BASE}/provider/notify-approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: provider.email,
+          businessName: provider.businessName,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.message || "Approval email failed");
+      }
+    } catch (error) {
+      console.warn("[ProviderApproval] Failed to send email", error);
+    }
+  };
+
+  const approveProviderRegistration = async (id) => {
+    const provider = providerRegistrations.find((p) => p.id === id);
+    if (!provider) return;
+
+    let passwordToUse = provider.password;
+    if (!passwordToUse) {
+      passwordToUse = window.prompt(
+        `No password was saved for ${provider.email}. Enter a password to create their login:`,
+        ""
+      );
+      if (!passwordToUse || passwordToUse.length < 6) {
+        alert("Approval cancelled. Please provide a password (min 6 characters).");
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/provider/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: provider.email,
+          password: passwordToUse,
+          businessName: provider.businessName,
+          ownerName: provider.ownerName,
+          category: provider.category,
+          phone: provider.phone,
+          address: provider.address,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.message || "Approval API failed");
+      }
+    } catch (error) {
+      console.warn("[ProviderApproval] Backend approval failed", error);
+      alert(error?.message || "Could not create the provider login. Please ensure the server is running and try again.");
+      return;
+    }
+
+    await updateProviderStatus(id, "Active");
+    notifyProviderApproval(provider);
+  };
+
+  const declineProviderRegistration = (id) => updateProviderStatus(id, "Declined");
 
   const approveListing = async (serviceId) => {
     await updateServiceStatus(serviceId, "Approved");
@@ -517,6 +628,14 @@ const ensureAuth = async () => {
   const recentNotifications = useMemo(() => notifications.slice(0, 3), [notifications]);
   const recentIssues = useMemo(() => issues.slice(0, 3), [issues]);
   const recentServices = useMemo(() => services.slice(0, 3), [services]);
+  const providerNotifications = useMemo(
+    () =>
+      notifications.filter((n) => {
+        const audience = (n.audience || "").toLowerCase();
+        return audience.includes("provider");
+      }),
+    [notifications]
+  );
 
   useEffect(() => {
     if (!db) return undefined;
@@ -616,25 +735,15 @@ const ensureAuth = async () => {
 
   return (
     <div className="support-page admin-dashboard-page">
-      <NavigationBar activeSection="admin" />
+      <NavigationBar activeSection="admin" notificationCount={pendingProviders.length} />
       <div className="admin-dashboard-shell">
         <main className="admin-main-content">
-        <section className="admin-hero support-hero">
-          <div>
-            <p className="clean-label subtle">Admin workspace</p>
-            <h2>Operations Control</h2>
-            <p className="support-hero-copy">
-              Monitor users, services, notifications, and tickets in one place.
-            </p>
-          </div>
-          <div className="admin-hero-actions">
-            <button className="logout-top" onClick={handleLogout}>
-              Logout
-            </button>
-          </div>
-        </section>
-
         <div className="admin-pill-row">
+          {activeSection !== "Dashboard" && (
+            <button className="pill-back-btn" onClick={() => setActiveSection("Dashboard")}>
+              {"< Back"}
+            </button>
+          )}
           <div className="admin-pill-nav">
             {Object.keys(responsibilities).map((key) => (
               <button
@@ -660,58 +769,191 @@ const ensureAuth = async () => {
               ))}
             </div>
 
-            <div className="admin-panel-grid">
-              <div className="admin-panel-card">
-                <h4>Recent Notifications</h4>
-                <div className="activity">
-                  {recentNotifications.length === 0 ? (
-                    <p>No notifications sent.</p>
-                  ) : (
-                    recentNotifications.map((notification) => (
-                      <p key={notification.id}>
-                        <strong>{notification.subject || "Untitled notification"}</strong>
-                        <br />
-                        <span>
-                          {notification.audience || "All"} ??? {notification.sentAt || "Queued"}
-                        </span>
-                      </p>
-                    ))
-                  )}
-                </div>
-              </div>
+            <div className="admin-panel-layout">
+              <aside className="admin-side-nav">
+                <button
+                  className={`side-nav-btn ${activePanel === "notifications" ? "active" : ""}`}
+                  onClick={() => setActivePanel("notifications")}
+                >
+                  Notifications
+                </button>
+                <button
+                  className={`side-nav-btn ${activePanel === "tickets" ? "active" : ""}`}
+                  onClick={() => setActivePanel("tickets")}
+                >
+                  Latest Tickets
+                </button>
+                <button
+                  className={`side-nav-btn ${activePanel === "updates" ? "active" : ""}`}
+                  onClick={() => setActivePanel("updates")}
+                >
+                  Service Updates
+                </button>
+                <button
+                  className={`side-nav-btn ${activePanel === "providers" ? "active" : ""}`}
+                  onClick={() => setActivePanel("providers")}
+                >
+                  Provider Registrations
+                </button>
+              </aside>
 
-              <div className="admin-panel-card">
-                <h4>Latest Tickets</h4>
-                <div className="activity">
-                  {recentIssues.length === 0 ? (
-                    <p>No tickets available.</p>
-                  ) : (
-                    recentIssues.map((ticket) => (
-                      <p key={ticket.id}>
-                        <strong>{ticket.subject}</strong>
-                        <br />
-                        <span>
-                          {ticket.customer} ??? {ticket.createdAt || "Pending"}
-                        </span>
-                      </p>
-                    ))
-                  )}
-                </div>
-              </div>
+              <div className="admin-panel-stack">
+                {activePanel === "notifications" && (
+                  <div className="admin-panel-card" id="admin-notifications-panel">
+                    <h4>Recent Notifications</h4>
+                    <div className="activity">
+                      {recentNotifications.length === 0 ? (
+                        <p>No notifications sent.</p>
+                      ) : (
+                        recentNotifications.map((notification) => (
+                          <p key={notification.id}>
+                            <strong>{notification.subject || "Untitled notification"}</strong>
+                            <br />
+                            <span>
+                              {notification.audience || "All"}  -  {notification.sentAt || "Queued"}
+                            </span>
+                          </p>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
 
-              <div className="admin-panel-card">
-                <h4>Service Updates</h4>
-                <div className="activity">
-                  {recentServices.length === 0 ? (
-                    <p>No services published yet.</p>
-                  ) : (
-                    recentServices.map((service) => (
-                      <p key={service.id}>
-                        {service.service || "Service"} ??? {service.status || "Pending"}
-                      </p>
-                    ))
-                  )}
-                </div>
+                {activePanel === "tickets" && (
+                  <div className="admin-panel-card">
+                    <h4>Latest Tickets</h4>
+                    <div className="activity">
+                      {recentIssues.length === 0 ? (
+                        <p>No tickets available.</p>
+                      ) : (
+                        recentIssues.map((ticket) => (
+                          <p key={ticket.id}>
+                            <strong>{ticket.subject}</strong>
+                            <br />
+                            <span>
+                              {ticket.customer}  -  {ticket.createdAt || "Pending"}
+                            </span>
+                          </p>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activePanel === "updates" && (
+                  <div className="admin-panel-card">
+                    <h4>Service Updates</h4>
+                    <div className="activity">
+                      {recentServices.length === 0 ? (
+                        <p>No services published yet.</p>
+                      ) : (
+                        recentServices.map((service) => (
+                          <p key={service.id}>
+                            {service.service || "Service"}  -  {service.status || "Pending"}
+                          </p>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activePanel === "providers" && (
+                  <div className="admin-panel-card provider-card" id="admin-provider-panel">
+                    <h4>Provider Registrations</h4>
+                    {pendingProviders.length === 0 ? (
+                      <p style={{ margin: 0 }}>No registrations awaiting approval.</p>
+                    ) : (
+                      <div className="admin-table-wrapper compact">
+                        <table className="admin-table provider-table">
+                          <thead>
+                            <tr>
+                              <th>Business</th>
+                              <th>Owner</th>
+                              <th>Category</th>
+                              <th>Email</th>
+                              <th>Status</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pendingProviders.slice(0, 12).map((p) => {
+                              const statusLabel = getBadgeLabel(p.status || "Pending");
+                              const statusClass = getBadgeClass(statusLabel || "Pending");
+                              const isPending = statusLabel.toLowerCase() === "pending";
+                              return (
+                                <tr key={p.id}>
+                                  <td>{p.businessName || "Untitled"}</td>
+                                  <td>{p.ownerName || "Owner"}</td>
+                                  <td>{p.category || "General"}</td>
+                                  <td>{p.email || "No email"}</td>
+                                  <td>
+                                    <span className={`badge ${statusClass}`}>
+                                      {statusLabel}
+                                    </span>
+                                  </td>
+                                  <td className="provider-actions">
+                                    <button
+                                      className="action-btn primary"
+                                      onClick={() => approveProviderRegistration(p.id)}
+                                      disabled={!isPending}
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      className="action-btn danger"
+                                      onClick={() => declineProviderRegistration(p.id)}
+                                      disabled={!isPending}
+                                    >
+                                      Decline
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
+                      <h5 style={{ margin: "0 0 8px" }}>Provider Notification History</h5>
+                      {providerNotifications.length === 0 ? (
+                        <p style={{ margin: 0 }}>No provider notifications sent yet.</p>
+                      ) : (
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>Subject</th>
+                              <th>Audience</th>
+                              <th>Channel</th>
+                              <th>Sent</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {providerNotifications.slice(0, 5).map((n) => (
+                              <tr key={n.id}>
+                                <td>{n.subject || "Untitled"}</td>
+                                <td>{n.audience || "Service Providers"}</td>
+                                <td>
+                                  <span className={`badge ${getBadgeClass(n.channel || "Email")}`}>
+                                    {getBadgeLabel(n.channel || "Email")}
+                                  </span>
+                                </td>
+                                <td>{n.sentAt || "Pending"}</td>
+                                <td>
+                                  <span className={`badge ${getBadgeClass(n.status || "Sent")}`}>
+                                    {getBadgeLabel(n.status || "Sent")}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </>
@@ -969,7 +1211,7 @@ const ensureAuth = async () => {
                 </div>
 
                 {notificationView === "Compose" ? (
-                  <div className="admin-table-wrapper" style={{ marginTop: 12, padding: 16 }}>
+                  <div className="admin-table-wrapper notification-compose" style={{ marginTop: 12, padding: 16 }}>
                     <div className="settings-grid">
                       <div className="admin-form-group">
                         <label>Audience</label>
