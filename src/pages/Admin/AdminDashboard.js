@@ -13,7 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { auth, db, ensureFirebaseAuth } from "../../firebase";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import NavigationBar from "../../components/NavigationBar";
 import { getServiceProviders, updateServiceProvider } from "../../serviceProviderCRUD";
 import "./AdminDashboard.css";
@@ -32,6 +32,7 @@ export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("Dashboard");
   const [userMgmtTab, setUserMgmtTab] = useState("Customer");
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = async () => {
     if (!window.confirm("Log out of the admin dashboard?")) return;
@@ -159,10 +160,12 @@ const ensureAuth = async () => {
   const [serviceView, setServiceView] = useState("Manage Services");
   const [providerRegistrations, setProviderRegistrations] = useState([]);
   const [activePanel, setActivePanel] = useState("notifications");
-  const pendingProviders = useMemo(
-    () => providerRegistrations.filter((p) => (p.status || "Pending") !== "Active"),
-    [providerRegistrations]
-  );
+  const pendingProviders = useMemo(() => {
+    return providerRegistrations.filter((p) => {
+      const normalized = getBadgeLabel(p.status || "Pending");
+      return normalized.toLowerCase() === "pending";
+    });
+  }, [providerRegistrations]);
 
   useEffect(() => {
     if (!db) return undefined;
@@ -182,6 +185,22 @@ const ensureAuth = async () => {
   useEffect(() => {
     refreshProviderRegistrations();
   }, []);
+
+  // Deep link into dashboard panels (e.g., from nav bell)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const target = params.get("target");
+    if (target === "providers") {
+      setActiveSection("Dashboard");
+      setActivePanel("providers");
+      setTimeout(() => {
+        const el = document.getElementById("admin-provider-panel");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 50);
+    }
+  }, [location.search]);
 
   const updateServiceStatus = async (serviceId, status) => {
     if (!db) return;
@@ -225,7 +244,7 @@ const ensureAuth = async () => {
   const notifyProviderApproval = async (provider) => {
     if (!provider?.email) return;
     try {
-      await fetch(`${API_BASE}/provider/notify-approval`, {
+      const response = await fetch(`${API_BASE}/provider/notify-approval`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -233,6 +252,10 @@ const ensureAuth = async () => {
           businessName: provider.businessName,
         }),
       });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.message || "Approval email failed");
+      }
     } catch (error) {
       console.warn("[ProviderApproval] Failed to send email", error);
     }
@@ -605,6 +628,14 @@ const ensureAuth = async () => {
   const recentNotifications = useMemo(() => notifications.slice(0, 3), [notifications]);
   const recentIssues = useMemo(() => issues.slice(0, 3), [issues]);
   const recentServices = useMemo(() => services.slice(0, 3), [services]);
+  const providerNotifications = useMemo(
+    () =>
+      notifications.filter((n) => {
+        const audience = (n.audience || "").toLowerCase();
+        return audience.includes("provider");
+      }),
+    [notifications]
+  );
 
   useEffect(() => {
     if (!db) return undefined;
@@ -707,16 +738,12 @@ const ensureAuth = async () => {
       <NavigationBar activeSection="admin" notificationCount={pendingProviders.length} />
       <div className="admin-dashboard-shell">
         <main className="admin-main-content">
-        <section className="admin-hero support-hero">
-          <div>
-            <h2>Operations Control</h2>
-            <p className="support-hero-copy">
-              Monitor users, services, notifications, and tickets in one place.
-            </p>
-          </div>
-        </section>
-
         <div className="admin-pill-row">
+          {activeSection !== "Dashboard" && (
+            <button className="pill-back-btn" onClick={() => setActiveSection("Dashboard")}>
+              {"< Back"}
+            </button>
+          )}
           <div className="admin-pill-nav">
             {Object.keys(responsibilities).map((key) => (
               <button
@@ -783,7 +810,7 @@ const ensureAuth = async () => {
                             <strong>{notification.subject || "Untitled notification"}</strong>
                             <br />
                             <span>
-                              {notification.audience || "All"} ??? {notification.sentAt || "Queued"}
+                              {notification.audience || "All"}  -  {notification.sentAt || "Queued"}
                             </span>
                           </p>
                         ))
@@ -804,7 +831,7 @@ const ensureAuth = async () => {
                             <strong>{ticket.subject}</strong>
                             <br />
                             <span>
-                              {ticket.customer} ??? {ticket.createdAt || "Pending"}
+                              {ticket.customer}  -  {ticket.createdAt || "Pending"}
                             </span>
                           </p>
                         ))
@@ -822,7 +849,7 @@ const ensureAuth = async () => {
                       ) : (
                         recentServices.map((service) => (
                           <p key={service.id}>
-                            {service.service || "Service"} ??? {service.status || "Pending"}
+                            {service.service || "Service"}  -  {service.status || "Pending"}
                           </p>
                         ))
                       )}
@@ -831,10 +858,10 @@ const ensureAuth = async () => {
                 )}
 
                 {activePanel === "providers" && (
-                  <div className="admin-panel-card provider-card">
+                  <div className="admin-panel-card provider-card" id="admin-provider-panel">
                     <h4>Provider Registrations</h4>
-                    {providerRegistrations.length === 0 ? (
-                      <p style={{ margin: 0 }}>No registrations yet.</p>
+                    {pendingProviders.length === 0 ? (
+                      <p style={{ margin: 0 }}>No registrations awaiting approval.</p>
                     ) : (
                       <div className="admin-table-wrapper compact">
                         <table className="admin-table provider-table">
@@ -849,10 +876,10 @@ const ensureAuth = async () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {providerRegistrations.slice(0, 12).map((p) => {
+                            {pendingProviders.slice(0, 12).map((p) => {
                               const statusLabel = getBadgeLabel(p.status || "Pending");
-                              const statusClass = getBadgeClass(p.status || "Pending");
-                              const isActive = (p.status || "Pending") === "Active";
+                              const statusClass = getBadgeClass(statusLabel || "Pending");
+                              const isPending = statusLabel.toLowerCase() === "pending";
                               return (
                                 <tr key={p.id}>
                                   <td>{p.businessName || "Untitled"}</td>
@@ -868,14 +895,14 @@ const ensureAuth = async () => {
                                     <button
                                       className="action-btn primary"
                                       onClick={() => approveProviderRegistration(p.id)}
-                                      disabled={isActive}
+                                      disabled={!isPending}
                                     >
                                       Approve
                                     </button>
                                     <button
                                       className="action-btn danger"
                                       onClick={() => declineProviderRegistration(p.id)}
-                                      disabled={isActive}
+                                      disabled={!isPending}
                                     >
                                       Decline
                                     </button>
@@ -887,6 +914,44 @@ const ensureAuth = async () => {
                         </table>
                       </div>
                     )}
+
+                    <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
+                      <h5 style={{ margin: "0 0 8px" }}>Provider Notification History</h5>
+                      {providerNotifications.length === 0 ? (
+                        <p style={{ margin: 0 }}>No provider notifications sent yet.</p>
+                      ) : (
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>Subject</th>
+                              <th>Audience</th>
+                              <th>Channel</th>
+                              <th>Sent</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {providerNotifications.slice(0, 5).map((n) => (
+                              <tr key={n.id}>
+                                <td>{n.subject || "Untitled"}</td>
+                                <td>{n.audience || "Service Providers"}</td>
+                                <td>
+                                  <span className={`badge ${getBadgeClass(n.channel || "Email")}`}>
+                                    {getBadgeLabel(n.channel || "Email")}
+                                  </span>
+                                </td>
+                                <td>{n.sentAt || "Pending"}</td>
+                                <td>
+                                  <span className={`badge ${getBadgeClass(n.status || "Sent")}`}>
+                                    {getBadgeLabel(n.status || "Sent")}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1146,7 +1211,7 @@ const ensureAuth = async () => {
                 </div>
 
                 {notificationView === "Compose" ? (
-                  <div className="admin-table-wrapper" style={{ marginTop: 12, padding: 16 }}>
+                  <div className="admin-table-wrapper notification-compose" style={{ marginTop: 12, padding: 16 }}>
                     <div className="settings-grid">
                       <div className="admin-form-group">
                         <label>Audience</label>

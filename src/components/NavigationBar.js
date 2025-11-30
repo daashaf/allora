@@ -43,6 +43,10 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
 
   const scrollToNotifications = () => {
     setIsNavCollapsed(true);
+    if (isAdminView) {
+      navigate("/admin/dashboard?target=providers");
+      return;
+    }
     const panel = document.getElementById("admin-notifications-panel");
     if (panel) {
       panel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -263,7 +267,7 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
               <>
                 <div className="nav-login-menu">
                   <button type="button" className="dashboard-nav-link nav-login-trigger" onClick={toggleLoginMenu}>
-                    Login ▼
+                    Login v
                   </button>
                   {showLoginMenu && (
                     <div className="nav-login-dropdown" onMouseLeave={closeLoginMenu}>
