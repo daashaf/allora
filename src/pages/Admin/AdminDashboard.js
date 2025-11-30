@@ -157,6 +157,10 @@ const ensureAuth = async () => {
   const [serviceView, setServiceView] = useState("Manage Services");
   const [providerRegistrations, setProviderRegistrations] = useState([]);
   const [activePanel, setActivePanel] = useState("notifications");
+  const pendingProviders = useMemo(
+    () => providerRegistrations.filter((p) => (p.status || "Pending") !== "Active"),
+    [providerRegistrations]
+  );
 
   useEffect(() => {
     if (!db) return undefined;
@@ -638,7 +642,7 @@ const ensureAuth = async () => {
 
   return (
     <div className="support-page admin-dashboard-page">
-      <NavigationBar activeSection="admin" notificationCount={recentNotifications.length} />
+      <NavigationBar activeSection="admin" notificationCount={pendingProviders.length} />
       <div className="admin-dashboard-shell">
         <main className="admin-main-content">
         <section className="admin-hero support-hero">
@@ -783,30 +787,40 @@ const ensureAuth = async () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {providerRegistrations
-                              .filter((p) => (p.status || "Pending") !== "Active")
-                              .slice(0, 8)
-                              .map((p) => (
+                            {providerRegistrations.slice(0, 12).map((p) => {
+                              const statusLabel = getBadgeLabel(p.status || "Pending");
+                              const statusClass = getBadgeClass(p.status || "Pending");
+                              const isActive = (p.status || "Pending") === "Active";
+                              return (
                                 <tr key={p.id}>
                                   <td>{p.businessName || "Untitled"}</td>
                                   <td>{p.ownerName || "Owner"}</td>
                                   <td>{p.category || "General"}</td>
                                   <td>{p.email || "No email"}</td>
                                   <td>
-                                    <span className={`badge ${getBadgeClass(p.status || "Pending")}`}>
-                                      {getBadgeLabel(p.status || "Pending")}
+                                    <span className={`badge ${statusClass}`}>
+                                      {statusLabel}
                                     </span>
                                   </td>
                                   <td className="provider-actions">
-                                    <button className="action-btn primary" onClick={() => approveProviderRegistration(p.id)}>
+                                    <button
+                                      className="action-btn primary"
+                                      onClick={() => approveProviderRegistration(p.id)}
+                                      disabled={isActive}
+                                    >
                                       Approve
                                     </button>
-                                    <button className="action-btn danger" onClick={() => declineProviderRegistration(p.id)}>
+                                    <button
+                                      className="action-btn danger"
+                                      onClick={() => declineProviderRegistration(p.id)}
+                                      disabled={isActive}
+                                    >
                                       Decline
                                     </button>
                                   </td>
                                 </tr>
-                              ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
