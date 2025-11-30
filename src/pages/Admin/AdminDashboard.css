@@ -125,6 +125,36 @@
   color: #0e2c63;
 }
 
+.admin-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.accordion-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  color: #0e2c63;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chevron {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  color: #4f5f8a;
+}
+
+.chevron.open {
+  transform: rotate(-180deg);
+}
+
 .provider-card .admin-table-wrapper.compact {
   margin-top: 10px;
   border: 1px solid #e6ecf7;

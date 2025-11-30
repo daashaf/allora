@@ -156,6 +156,12 @@ const ensureAuth = async () => {
   const [listings, setListings] = useState([]);
   const [serviceView, setServiceView] = useState("Manage Services");
   const [providerRegistrations, setProviderRegistrations] = useState([]);
+  const [panelOpen, setPanelOpen] = useState({
+    notifications: true,
+    tickets: true,
+    updates: true,
+    providers: true,
+  });
 
   useEffect(() => {
     if (!db) return undefined;
@@ -217,6 +223,12 @@ const ensureAuth = async () => {
 
   const approveProviderRegistration = (id) => updateProviderStatus(id, "Active");
   const declineProviderRegistration = (id) => updateProviderStatus(id, "Declined");
+
+  const togglePanel = (key) =>
+    setPanelOpen((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
 
   const approveListing = async (serviceId) => {
     await updateServiceStatus(serviceId, "Approved");
@@ -678,103 +690,153 @@ const ensureAuth = async () => {
 
             <div className="admin-panel-grid">
               <div className="admin-panel-card" id="admin-notifications-panel">
-                <h4>Recent Notifications</h4>
-                <div className="activity">
-                  {recentNotifications.length === 0 ? (
-                    <p>No notifications sent.</p>
-                  ) : (
-                    recentNotifications.map((notification) => (
-                      <p key={notification.id}>
-                        <strong>{notification.subject || "Untitled notification"}</strong>
-                        <br />
-                        <span>
-                          {notification.audience || "All"} ??? {notification.sentAt || "Queued"}
-                        </span>
-                      </p>
-                    ))
-                  )}
+                <div className="admin-card-header">
+                  <button
+                    type="button"
+                    className="accordion-toggle"
+                    onClick={() => togglePanel("notifications")}
+                    aria-expanded={panelOpen.notifications}
+                  >
+                    Recent Notifications
+                    <span className={`chevron ${panelOpen.notifications ? "open" : ""}`} aria-hidden="true">⌄</span>
+                  </button>
                 </div>
+                {panelOpen.notifications && (
+                  <div className="activity">
+                    {recentNotifications.length === 0 ? (
+                      <p>No notifications sent.</p>
+                    ) : (
+                      recentNotifications.map((notification) => (
+                        <p key={notification.id}>
+                          <strong>{notification.subject || "Untitled notification"}</strong>
+                          <br />
+                          <span>
+                            {notification.audience || "All"} ??? {notification.sentAt || "Queued"}
+                          </span>
+                        </p>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="admin-panel-card">
-                <h4>Latest Tickets</h4>
-                <div className="activity">
-                  {recentIssues.length === 0 ? (
-                    <p>No tickets available.</p>
-                  ) : (
-                    recentIssues.map((ticket) => (
-                      <p key={ticket.id}>
-                        <strong>{ticket.subject}</strong>
-                        <br />
-                        <span>
-                          {ticket.customer} ??? {ticket.createdAt || "Pending"}
-                        </span>
-                      </p>
-                    ))
-                  )}
+                <div className="admin-card-header">
+                  <button
+                    type="button"
+                    className="accordion-toggle"
+                    onClick={() => togglePanel("tickets")}
+                    aria-expanded={panelOpen.tickets}
+                  >
+                    Latest Tickets
+                    <span className={`chevron ${panelOpen.tickets ? "open" : ""}`} aria-hidden="true">⌄</span>
+                  </button>
                 </div>
+                {panelOpen.tickets && (
+                  <div className="activity">
+                    {recentIssues.length === 0 ? (
+                      <p>No tickets available.</p>
+                    ) : (
+                      recentIssues.map((ticket) => (
+                        <p key={ticket.id}>
+                          <strong>{ticket.subject}</strong>
+                          <br />
+                          <span>
+                            {ticket.customer} ??? {ticket.createdAt || "Pending"}
+                          </span>
+                        </p>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="admin-panel-card">
-                <h4>Service Updates</h4>
-                <div className="activity">
-                  {recentServices.length === 0 ? (
-                    <p>No services published yet.</p>
-                  ) : (
-                    recentServices.map((service) => (
-                      <p key={service.id}>
-                        {service.service || "Service"} ??? {service.status || "Pending"}
-                      </p>
-                    ))
-                  )}
+                <div className="admin-card-header">
+                  <button
+                    type="button"
+                    className="accordion-toggle"
+                    onClick={() => togglePanel("updates")}
+                    aria-expanded={panelOpen.updates}
+                  >
+                    Service Updates
+                    <span className={`chevron ${panelOpen.updates ? "open" : ""}`} aria-hidden="true">⌄</span>
+                  </button>
                 </div>
+                {panelOpen.updates && (
+                  <div className="activity">
+                    {recentServices.length === 0 ? (
+                      <p>No services published yet.</p>
+                    ) : (
+                      recentServices.map((service) => (
+                        <p key={service.id}>
+                          {service.service || "Service"} ??? {service.status || "Pending"}
+                        </p>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="admin-panel-card provider-card">
-                <h4>Provider Registrations</h4>
-                {providerRegistrations.length === 0 ? (
-                  <p style={{ margin: 0 }}>No registrations yet.</p>
-                ) : (
-                  <div className="admin-table-wrapper compact">
-                    <table className="admin-table provider-table">
-                      <thead>
-                        <tr>
-                          <th>Business</th>
-                          <th>Owner</th>
-                          <th>Category</th>
-                          <th>Email</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {providerRegistrations
-                          .filter((p) => (p.status || "Pending") !== "Active")
-                          .slice(0, 8)
-                          .map((p) => (
-                            <tr key={p.id}>
-                              <td>{p.businessName || "Untitled"}</td>
-                              <td>{p.ownerName || "Owner"}</td>
-                              <td>{p.category || "General"}</td>
-                              <td>{p.email || "No email"}</td>
-                              <td>
-                                <span className={`badge ${getBadgeClass(p.status || "Pending")}`}>
-                                  {getBadgeLabel(p.status || "Pending")}
-                                </span>
-                              </td>
-                              <td className="provider-actions">
-                                <button className="action-btn primary" onClick={() => approveProviderRegistration(p.id)}>
-                                  Approve
-                                </button>
-                                <button className="action-btn danger" onClick={() => declineProviderRegistration(p.id)}>
-                                  Decline
-                                </button>
-                              </td>
+                <div className="admin-card-header">
+                  <button
+                    type="button"
+                    className="accordion-toggle"
+                    onClick={() => togglePanel("providers")}
+                    aria-expanded={panelOpen.providers}
+                  >
+                    Provider Registrations
+                    <span className={`chevron ${panelOpen.providers ? "open" : ""}`} aria-hidden="true">⌄</span>
+                  </button>
+                </div>
+                {panelOpen.providers && (
+                  <>
+                    {providerRegistrations.length === 0 ? (
+                      <p style={{ margin: 0 }}>No registrations yet.</p>
+                    ) : (
+                      <div className="admin-table-wrapper compact">
+                        <table className="admin-table provider-table">
+                          <thead>
+                            <tr>
+                              <th>Business</th>
+                              <th>Owner</th>
+                              <th>Category</th>
+                              <th>Email</th>
+                              <th>Status</th>
+                              <th>Actions</th>
                             </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
+                          </thead>
+                          <tbody>
+                            {providerRegistrations
+                              .filter((p) => (p.status || "Pending") !== "Active")
+                              .slice(0, 8)
+                              .map((p) => (
+                                <tr key={p.id}>
+                                  <td>{p.businessName || "Untitled"}</td>
+                                  <td>{p.ownerName || "Owner"}</td>
+                                  <td>{p.category || "General"}</td>
+                                  <td>{p.email || "No email"}</td>
+                                  <td>
+                                    <span className={`badge ${getBadgeClass(p.status || "Pending")}`}>
+                                      {getBadgeLabel(p.status || "Pending")}
+                                    </span>
+                                  </td>
+                                  <td className="provider-actions">
+                                    <button className="action-btn primary" onClick={() => approveProviderRegistration(p.id)}>
+                                      Approve
+                                    </button>
+                                    <button className="action-btn danger" onClick={() => declineProviderRegistration(p.id)}>
+                                      Decline
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
