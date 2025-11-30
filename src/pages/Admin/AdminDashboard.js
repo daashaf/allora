@@ -648,11 +648,6 @@ const ensureAuth = async () => {
               Monitor users, services, notifications, and tickets in one place.
             </p>
           </div>
-          <div className="admin-hero-actions">
-            <button className="logout-top" onClick={handleLogout}>
-              Logout
-            </button>
-          </div>
         </section>
 
         <div className="admin-pill-row">
@@ -677,9 +672,6 @@ const ensureAuth = async () => {
               }}
             >
               Notifications
-            </button>
-            <button className="logout-top" onClick={handleLogout}>
-              Logout
             </button>
           </div>
         </div>
