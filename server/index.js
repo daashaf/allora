@@ -173,6 +173,41 @@ Allora Support`,
   }
 });
 
+app.post("/provider/notify-approval", async (req, res) => {
+  const { email, businessName } = req.body || {};
+
+  if (!email) {
+    return res.status(400).json({ message: "Email is required." });
+  }
+
+  const safeName = businessName || "your business";
+  const mailPayload = {
+    from: process.env.MAIL_USER,
+    to: email,
+    subject: "Your Allora provider account has been approved",
+    text: `Kia ora,
+
+Good news! Your provider registration for ${safeName} has been approved.
+
+You can now sign in to the Allora Service Hub and start managing your services.
+
+Nga mihi,
+Allora Support`,
+    html: `<p>Kia ora,</p>
+           <p>Good news! Your provider registration for <strong>${safeName}</strong> has been approved.</p>
+           <p>You can now sign in to the <strong>Allora Service Hub</strong> and start managing your services.</p>
+           <p style="margin-top:20px;">Nga mihi,<br/>Allora Support</p>`,
+  };
+
+  try {
+    await sendMailWithTimeout(mailPayload);
+    return res.json({ message: "Approval email sent." });
+  } catch (error) {
+    console.error("[provider-approval] Failed to send approval email:", error.message);
+    return res.status(500).json({ message: "Unable to send approval email right now." });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Password reset service running on http://localhost:${port}`);
 });

@@ -18,6 +18,8 @@ import NavigationBar from "../../components/NavigationBar";
 import { getServiceProviders, updateServiceProvider } from "../../serviceProviderCRUD";
 import "./AdminDashboard.css";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
+
 const defaultSettings = {
   siteName: "Allora Service Hub",
   maintenance: false,
@@ -220,7 +222,30 @@ const ensureAuth = async () => {
     refreshProviderRegistrations();
   };
 
-  const approveProviderRegistration = (id) => updateProviderStatus(id, "Active");
+  const notifyProviderApproval = async (provider) => {
+    if (!provider?.email) return;
+    try {
+      await fetch(`${API_BASE}/provider/notify-approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: provider.email,
+          businessName: provider.businessName,
+        }),
+      });
+    } catch (error) {
+      console.warn("[ProviderApproval] Failed to send email", error);
+    }
+  };
+
+  const approveProviderRegistration = async (id) => {
+    const provider = providerRegistrations.find((p) => p.id === id);
+    await updateProviderStatus(id, "Active");
+    if (provider) {
+      notifyProviderApproval(provider);
+    }
+  };
+
   const declineProviderRegistration = (id) => updateProviderStatus(id, "Declined");
 
   const approveListing = async (serviceId) => {
