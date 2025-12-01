@@ -10,6 +10,7 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
   const [isNavCollapsed, setIsNavCollapsed] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
+  const [loginSelection, setLoginSelection] = useState("customer");
   const [showLoginMenu, setShowLoginMenu] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,10 +42,30 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
     navigate("/provider/register", { state: { role: "Service Provider" } });
   };
 
+  const handleLoginSelect = (value) => {
+    setIsNavCollapsed(true);
+    setLoginSelection(value);
+    setShowLoginMenu(false);
+    if (value === "provider") {
+      navigate("/provider/login");
+    } else {
+      navigate("/login");
+    }
+  };
+
   const scrollToNotifications = () => {
     setIsNavCollapsed(true);
     if (isAdminView) {
-      navigate("/admin/dashboard?target=providers");
+      const targetSearch = "?target=notifications";
+      const onAdminDashboard = location.pathname.startsWith("/admin/dashboard");
+      if (onAdminDashboard && location.search === targetSearch) {
+        const panel = document.getElementById("admin-notifications-panel");
+        if (panel) {
+          panel.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+      }
+      navigate(`/admin/dashboard${targetSearch}`);
       return;
     }
     const panel = document.getElementById("admin-notifications-panel");
@@ -67,16 +88,38 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
     }
   };
 
-  const toggleLoginMenu = () => setShowLoginMenu((prev) => !prev);
-
-  const closeLoginMenu = () => setShowLoginMenu(false);
-
   const toggleNavCollapse = () => {
     setIsNavCollapsed((previous) => !previous);
   };
 
+  const handleNotificationsClick = () => {
+    setIsNavCollapsed(true);
+    if (isAdminView) {
+      const targetSearch = "?target=notifications";
+      const onAdminDashboard = location.pathname.startsWith("/admin/dashboard");
+      if (onAdminDashboard) {
+        const panel = document.getElementById("admin-notifications-panel");
+        if (panel) {
+          panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        if (location.search !== targetSearch) {
+          navigate(`/admin/dashboard${targetSearch}`);
+        }
+      } else {
+        navigate(`/admin/dashboard${targetSearch}`);
+      }
+    } else if (isAgentView) {
+      navigate("/agent-dashboard");
+    } else if (isProviderView) {
+      navigate("/provider/dashboard");
+    } else {
+      navigate("/support");
+    }
+  };
+
   useEffect(() => {
     setIsNavCollapsed(true);
+    setShowLoginMenu(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -143,14 +186,6 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
             aria-current={location.pathname.startsWith("/services") ? "page" : undefined}
           >
             Services
-          </button>
-          <button
-            type="button"
-            className={navLinkClass(null, "/login")}
-            onClick={() => handleNavRouteClick("/login")}
-            aria-current={location.pathname.startsWith("/login") ? "page" : undefined}
-          >
-            Login
           </button>
         </>
       );
@@ -243,13 +278,30 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
                     type="button"
                     className="nav-icon-btn"
                     aria-label="Notifications"
-                    onClick={scrollToNotifications}
                     title="Notifications"
+                    onClick={handleNotificationsClick}
                   >
-                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
+                    >
                       <path
-                        fill="currentColor"
-                        d="M12 22a2 2 0 0 0 1.985-1.75L14 20h-4a2 2 0 0 0 1.85 1.995L12 22Zm6-6v-4.5a6 6 0 0 0-5-5.917V5a1 1 0 1 0-2 0v.583A6 6 0 0 0 6 11.5V16l-1 1v1h16v-1l-1-1Z"
+                        d="M12 4a6 6 0 00-6 6v3.382l-.723 1.447A1 1 0 006.173 17h11.654a1 1 0 00.896-1.471L18 13.382V10a6 6 0 00-6-6z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M10 19a2 2 0 004 0"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       />
                     </svg>
                     {notificationCount > 0 && (
@@ -258,44 +310,46 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
                       </span>
                     )}
                   </button>
-                <button type="button" className="dashboard-nav-link nav-support-logout" onClick={handleLogout}>
-                  Logout
-                </button>
+                  {/* Menu icon removed per request */}
+                  <button type="button" className="dashboard-nav-link nav-support-logout" onClick={handleLogout}>
+                    Logout
+                  </button>
                 </div>
               </div>
-            ) : (
-              <>
-                <div className="nav-login-menu">
-                  <button type="button" className="dashboard-nav-link nav-login-trigger" onClick={toggleLoginMenu}>
-                    Login v
-                  </button>
-                  {showLoginMenu && (
-                    <div className="nav-login-dropdown" onMouseLeave={closeLoginMenu}>
-                      <button onClick={() => handleNavRouteClick("/login")}>Customer Login</button>
-                      <button onClick={() => handleNavRouteClick("/staff/login")}>Staff Login</button>
-                    </div>
-                  )}
+                ) : (
+                  <>
+                <div className="nav-login-buttons d-flex flex-wrap align-items-center gap-2">
+                  <div className="nav-login-menu">
+                    <button
+                      type="button"
+                      className="nav-login-trigger"
+                      aria-haspopup="menu"
+                      aria-expanded={showLoginMenu}
+                      onClick={() => setShowLoginMenu((open) => !open)}
+                    >
+                      <span className="nav-login-label">
+                        {loginSelection === "provider" ? "Service Provider Login" : "Customer Login"}
+                      </span>
+                      <span className="nav-login-chevron" aria-hidden="true">▾</span>
+                    </button>
+                    {showLoginMenu && (
+                      <div className="nav-login-dropdown" role="menu">
+                        <button type="button" onClick={() => handleLoginSelect("customer")} role="menuitem">
+                          Customer Login
+                        </button>
+                        <button type="button" onClick={() => handleLoginSelect("provider")} role="menuitem">
+                          Service Provider Login
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button className="nav-cta text-uppercase" type="button" onClick={handleJoinAsProfessional}>
                   Join as Professional
                 </button>
                 <button
                   type="button"
-                  className="nav-icon-btn"
-                  aria-label="Notifications"
-                  onClick={scrollToNotifications}
-                  title="Notifications"
-                >
-                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-                    <path
-                      fill="currentColor"
-                      d="M12 22a2 2 0 0 0 1.985-1.75L14 20h-4a2 2 0 0 0 1.85 1.995L12 22Zm6-6v-4.5a6 6 0 0 0-5-5.917V5a1 1 0 1 0-2 0v.583A6 6 0 0 0 6 11.5V16l-1 1v1h16v-1l-1-1Z"
-                    />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  className={`${navLinkClass(null, "/support")} nav-support-link`}
+                  className={navLinkClass(null, "/support")}
                   onClick={() => handleNavRouteClick("/support")}
                   aria-current={location.pathname.startsWith("/support") ? "page" : undefined}
                 >
@@ -309,3 +363,4 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
     </header>
   );
 }
+

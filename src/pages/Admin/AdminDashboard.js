@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import {
   addDoc,
@@ -155,11 +155,17 @@ const ensureAuth = async () => {
   }, [customers, userMgmtTab]);
 
   // Service Management state + Firestore data
+  const SERVICE_COLLECTION = "Services";
   const [services, setServices] = useState([]);
   const [listings, setListings] = useState([]);
   const [serviceView, setServiceView] = useState("Manage Services");
   const [providerRegistrations, setProviderRegistrations] = useState([]);
   const [activePanel, setActivePanel] = useState("notifications");
+  const handleDashboardPanelChange = (panelKey) => {
+    setActiveSection("Dashboard");
+    setActivePanel(panelKey);
+    navigate(`/admin/dashboard?target=${panelKey}`);
+  };
   const pendingProviders = useMemo(() => {
     return providerRegistrations.filter((p) => {
       const normalized = getBadgeLabel(p.status || "Pending");
@@ -169,8 +175,15 @@ const ensureAuth = async () => {
 
   useEffect(() => {
     if (!db) return undefined;
-    return onSnapshot(collection(db, "Services"), (snapshot) => {
-      const docs = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    return onSnapshot(collection(db, SERVICE_COLLECTION), (snapshot) => {
+      const docs = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const { display: submittedAtDisplay } = formatSnapshotTimestamp(
+          data.submittedAt,
+          data.submittedAt || ""
+        );
+        return { id: docSnap.id, ...data, submittedAtDisplay };
+      });
       setServices(docs);
       setListings(docs);
     });
@@ -189,27 +202,52 @@ const ensureAuth = async () => {
   // Deep link into dashboard panels (e.g., from nav bell)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const target = params.get("target");
-    if (target === "providers") {
-      setActiveSection("Dashboard");
-      setActivePanel("providers");
-      setTimeout(() => {
-        const el = document.getElementById("admin-provider-panel");
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }, 50);
-    }
+    const target = (params.get("target") || "").toLowerCase();
+    if (!target) return;
+
+    const panelIdMap = {
+      notifications: "admin-notifications-panel",
+      notification: "admin-notifications-panel",
+      tickets: "admin-tickets-panel",
+      updates: "admin-updates-panel",
+      providers: "admin-provider-panel",
+      provider: "admin-provider-panel",
+    };
+
+    const panelId = panelIdMap[target];
+    if (!panelId) return;
+
+    const panelName =
+      target === "provider" ? "providers" : target === "notification" ? "notifications" : target;
+
+    setActiveSection("Dashboard");
+    setActivePanel(panelName);
+    setTimeout(() => {
+      const el = document.getElementById(panelId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 50);
   }, [location.search]);
 
   const updateServiceStatus = async (serviceId, status) => {
     if (!db) return;
     if (!(await ensureAuth())) return;
+    const serviceRecord = services.find((service) => service.id === serviceId);
+    const linkedCategoryId =
+      serviceRecord?.categoryDocId ||
+      categoryServices.find((c) => c.serviceDocId === serviceId)?.id;
     try {
-      await updateDoc(doc(db, "Services", serviceId), {
+      await updateDoc(doc(db, SERVICE_COLLECTION, serviceId), {
         status,
         updatedAt: serverTimestamp(),
       });
+      if (linkedCategoryId) {
+        await updateDoc(doc(db, SERVICE_CATEGORY_COLLECTION, linkedCategoryId), {
+          status,
+          updatedAt: serverTimestamp(),
+        });
+      }
     } catch (error) {
       console.error("[Firebase] Failed to update service", serviceId, error);
       alert("Unable to update the service. Please try again.");
@@ -227,8 +265,15 @@ const ensureAuth = async () => {
     if (!db) return;
     if (!(await ensureAuth())) return;
     if (!window.confirm("Delete this service permanently?")) return;
+    const serviceRecord = services.find((service) => service.id === serviceId);
+    const linkedCategoryId =
+      serviceRecord?.categoryDocId ||
+      categoryServices.find((c) => c.serviceDocId === serviceId)?.id;
     try {
-      await deleteDoc(doc(db, "Services", serviceId));
+      await deleteDoc(doc(db, SERVICE_COLLECTION, serviceId));
+      if (linkedCategoryId) {
+        await deleteDoc(doc(db, SERVICE_CATEGORY_COLLECTION, linkedCategoryId));
+      }
     } catch (error) {
       console.error("[Firebase] Failed to delete service", serviceId, error);
       alert("Unable to delete the service. Please try again.");
@@ -242,7 +287,7 @@ const ensureAuth = async () => {
   };
 
   const notifyProviderApproval = async (provider) => {
-    if (!provider?.email) return;
+    if (!provider?.email) return false;
     try {
       const response = await fetch(`${API_BASE}/provider/notify-approval`, {
         method: "POST",
@@ -256,8 +301,26 @@ const ensureAuth = async () => {
         const data = await response.json().catch(() => ({}));
         throw new Error(data?.message || "Approval email failed");
       }
+      return true;
     } catch (error) {
       console.warn("[ProviderApproval] Failed to send email", error);
+      return false;
+    }
+  };
+
+  const logProviderNotification = async (action, provider) => {
+    if (!db || !provider) return;
+    try {
+      await addDoc(collection(db, "Notification"), {
+        audience: "Service Providers",
+        channel: "In-App",
+        subject: `Provider ${action}`,
+        message: `${provider.businessName || provider.email || "A provider"} was ${action.toLowerCase()}.`,
+        status: "Sent",
+        sentAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn("[ProviderNotification] Failed to log notification", error);
     }
   };
 
@@ -303,10 +366,20 @@ const ensureAuth = async () => {
     }
 
     await updateProviderStatus(id, "Active");
-    notifyProviderApproval(provider);
+    const emailSent = await notifyProviderApproval(provider);
+    window.alert(
+      emailSent
+        ? `Approval email has been sent to ${provider.email}.`
+        : "Provider approved, but the email could not be confirmed as sent."
+    );
+    logProviderNotification("Approved", provider);
   };
 
-  const declineProviderRegistration = (id) => updateProviderStatus(id, "Declined");
+  const declineProviderRegistration = (id) => {
+    const provider = providerRegistrations.find((p) => p.id === id);
+    updateProviderStatus(id, "Declined");
+    logProviderNotification("Declined", provider);
+  };
 
   const approveListing = async (serviceId) => {
     await updateServiceStatus(serviceId, "Approved");
@@ -384,6 +457,7 @@ const ensureAuth = async () => {
   // Service Categories data
   const SERVICE_CATEGORY_COLLECTION = "ServiceCategories";
   const [categoryServices, setCategoryServices] = useState([]);
+  const syncedCategoriesRef = useRef(new Set());
 
   useEffect(() => {
     if (!db) return undefined;
@@ -397,27 +471,107 @@ const ensureAuth = async () => {
             category: data.category || "General",
             provider: data.provider || "Unknown",
             status: data.status || "Active",
+            serviceDocId: data.serviceDocId || data.serviceId || "",
+            city: data.city || data.location || "",
+            description: data.description || data.details || "",
           };
         })
       );
     });
   }, []);
 
+  useEffect(() => {
+    if (!db) return undefined;
+    const syncMissingServices = async () => {
+      if (!(await ensureAuth())) return;
+
+      for (const category of categoryServices) {
+        if (category.serviceDocId || syncedCategoriesRef.current.has(category.id)) continue;
+
+        const matchingService = services.find(
+          (svc) =>
+            (svc.service || "").toLowerCase() === (category.service || "").toLowerCase() &&
+            (svc.provider || "").toLowerCase() === (category.provider || "").toLowerCase()
+        );
+
+        try {
+          if (matchingService) {
+            await updateDoc(doc(db, SERVICE_CATEGORY_COLLECTION, category.id), {
+              serviceDocId: matchingService.id,
+            });
+            if (!matchingService.categoryDocId) {
+              await updateDoc(doc(db, SERVICE_COLLECTION, matchingService.id), {
+                categoryDocId: category.id,
+              });
+            }
+            syncedCategoriesRef.current.add(category.id);
+            continue;
+          }
+
+          const submittedAt = new Date().toISOString();
+          const serviceDocRef = await addDoc(collection(db, SERVICE_COLLECTION), {
+            service: category.service,
+            category: category.category,
+            provider: category.provider,
+            city: category.city || "",
+            description: category.description || "",
+            status: category.status || "Active",
+            visible: (category.status || "").toLowerCase() !== "suspended",
+            submittedAt,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            createdBy: "admin-sync",
+          });
+          await updateDoc(doc(db, SERVICE_CATEGORY_COLLECTION, category.id), {
+            serviceDocId: serviceDocRef.id,
+          });
+          await updateDoc(serviceDocRef, { categoryDocId: category.id });
+          syncedCategoriesRef.current.add(category.id);
+        } catch (error) {
+          console.warn("[Firebase] Failed to sync service category to Services", error);
+        }
+      }
+    };
+
+    syncMissingServices();
+  }, [categoryServices, services]);
+
   const addCategoryService = async () => {
     if (!db) return;
     if (!(await ensureAuth())) return;
     const name = window.prompt("Service name?");
     if (!name) return;
-    const category = window.prompt("Category?");
-    const provider = window.prompt("Provider?");
+    const category = window.prompt("Category?", "General") || "General";
+    const provider = window.prompt("Provider?", "Unknown") || "Unknown";
+    const city = window.prompt("City or region? (optional)", "") || "";
+    const description = window.prompt("Short description? (optional)", "") || "";
     try {
-      await addDoc(collection(db, SERVICE_CATEGORY_COLLECTION), {
-        service: name,
-        category: category || "General",
-        provider: provider || "Unknown",
+      const submittedAt = new Date().toISOString();
+      const serviceDocRef = await addDoc(collection(db, SERVICE_COLLECTION), {
+        service: name.trim(),
+        category: category.trim() || "General",
+        provider: provider.trim() || "Unknown",
+        city: city.trim(),
+        description: description.trim(),
         status: "Active",
+        visible: true,
+        submittedAt,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: "admin-panel",
+      });
+      const categoryDocRef = await addDoc(collection(db, SERVICE_CATEGORY_COLLECTION), {
+        service: name.trim(),
+        category: category.trim() || "General",
+        provider: provider.trim() || "Unknown",
+        city: city.trim(),
+        description: description.trim(),
+        status: "Active",
+        serviceDocId: serviceDocRef.id,
         createdAt: serverTimestamp(),
       });
+      await updateDoc(serviceDocRef, { categoryDocId: categoryDocRef.id });
+      window.alert("Service added and published to customers.");
     } catch (error) {
       console.error("[Firebase] Failed to add service category", error);
       alert("Unable to add the service. Please try again.");
@@ -432,6 +586,13 @@ const ensureAuth = async () => {
     const nextStatus = serviceRecord.status === "Suspended" ? "Active" : "Suspended";
     try {
       await updateDoc(doc(db, SERVICE_CATEGORY_COLLECTION, id), { status: nextStatus });
+      if (serviceRecord.serviceDocId) {
+        await updateDoc(doc(db, SERVICE_COLLECTION, serviceRecord.serviceDocId), {
+          status: nextStatus,
+          visible: nextStatus !== "Suspended",
+          updatedAt: serverTimestamp(),
+        });
+      }
     } catch (error) {
       console.error("[Firebase] Failed to update service category", id, error);
       alert("Unable to update the service status. Please try again.");
@@ -441,8 +602,12 @@ const ensureAuth = async () => {
   const deleteCategoryService = async (id) => {
     if (!db) return;
     if (!(await ensureAuth())) return;
+    const serviceRecord = categoryServices.find((s) => s.id === id);
     try {
       await deleteDoc(doc(db, SERVICE_CATEGORY_COLLECTION, id));
+      if (serviceRecord?.serviceDocId) {
+        await deleteDoc(doc(db, SERVICE_COLLECTION, serviceRecord.serviceDocId));
+      }
     } catch (error) {
       console.error("[Firebase] Failed to delete service category", id, error);
       alert("Unable to delete the service. Please try again.");
@@ -628,14 +793,13 @@ const ensureAuth = async () => {
   const recentNotifications = useMemo(() => notifications.slice(0, 3), [notifications]);
   const recentIssues = useMemo(() => issues.slice(0, 3), [issues]);
   const recentServices = useMemo(() => services.slice(0, 3), [services]);
-  const providerNotifications = useMemo(
-    () =>
-      notifications.filter((n) => {
-        const audience = (n.audience || "").toLowerCase();
-        return audience.includes("provider");
-      }),
-    [notifications]
-  );
+  const providerNotifications = useMemo(() => {
+    const targeted = notifications.filter((n) => {
+      const audience = (n.audience || "").toLowerCase();
+      return audience.includes("provider");
+    });
+    return targeted.length ? targeted : notifications;
+  }, [notifications]);
 
   useEffect(() => {
     if (!db) return undefined;
@@ -735,7 +899,7 @@ const ensureAuth = async () => {
 
   return (
     <div className="support-page admin-dashboard-page">
-      <NavigationBar activeSection="admin" notificationCount={pendingProviders.length} />
+      <NavigationBar activeSection="admin" notificationCount={notifications.length} />
       <div className="admin-dashboard-shell">
         <main className="admin-main-content">
         <div className="admin-pill-row">
@@ -773,25 +937,25 @@ const ensureAuth = async () => {
               <aside className="admin-side-nav">
                 <button
                   className={`side-nav-btn ${activePanel === "notifications" ? "active" : ""}`}
-                  onClick={() => setActivePanel("notifications")}
+                  onClick={() => handleDashboardPanelChange("notifications")}
                 >
                   Notifications
                 </button>
                 <button
                   className={`side-nav-btn ${activePanel === "tickets" ? "active" : ""}`}
-                  onClick={() => setActivePanel("tickets")}
+                  onClick={() => handleDashboardPanelChange("tickets")}
                 >
                   Latest Tickets
                 </button>
                 <button
                   className={`side-nav-btn ${activePanel === "updates" ? "active" : ""}`}
-                  onClick={() => setActivePanel("updates")}
+                  onClick={() => handleDashboardPanelChange("updates")}
                 >
                   Service Updates
                 </button>
                 <button
                   className={`side-nav-btn ${activePanel === "providers" ? "active" : ""}`}
-                  onClick={() => setActivePanel("providers")}
+                  onClick={() => handleDashboardPanelChange("providers")}
                 >
                   Provider Registrations
                 </button>
@@ -820,7 +984,7 @@ const ensureAuth = async () => {
                 )}
 
                 {activePanel === "tickets" && (
-                  <div className="admin-panel-card">
+                  <div className="admin-panel-card" id="admin-tickets-panel">
                     <h4>Latest Tickets</h4>
                     <div className="activity">
                       {recentIssues.length === 0 ? (
@@ -841,7 +1005,7 @@ const ensureAuth = async () => {
                 )}
 
                 {activePanel === "updates" && (
-                  <div className="admin-panel-card">
+                  <div className="admin-panel-card" id="admin-updates-panel">
                     <h4>Service Updates</h4>
                     <div className="activity">
                       {recentServices.length === 0 ? (
@@ -989,16 +1153,22 @@ const ensureAuth = async () => {
             {activeSection === "Service Management" && (
               <div className="actions-bar top-right">
                 <button
-                  className="action-btn primary"
+                  className={`action-btn ${serviceView === "Manage Services" ? "primary" : ""}`}
                   onClick={() => setServiceView("Manage Services")}
                 >
                   Manage Services
                 </button>
                 <button
-                  className="action-btn"
+                  className={`action-btn ${serviceView === "Review Listings" ? "primary" : ""}`}
                   onClick={() => setServiceView("Review Listings")}
                 >
                   Review Listings
+                </button>
+                <button
+                  className="action-btn primary"
+                  onClick={addCategoryService}
+                >
+                  Add Service
                 </button>
               </div>
             )}
@@ -1035,7 +1205,7 @@ const ensureAuth = async () => {
                                 {getBadgeLabel(s.status)}
                               </span>
                             </td>
-                            <td>{s.submittedAt}</td>
+                            <td>{s.submittedAtDisplay || s.submittedAt || "Pending"}</td>
                             <td className="admin-table-actions">
                               <button className="action-btn" onClick={() => toggleServiceStatus(s.id)}>
                                 {s.status === "Suspended" ? "Activate" : "Suspend"}
@@ -1070,7 +1240,7 @@ const ensureAuth = async () => {
                             <td>{l.service}</td>
                             <td>{l.provider}</td>
                             <td>{l.category}</td>
-                            <td>{l.submittedAt}</td>
+                            <td>{l.submittedAtDisplay || l.submittedAt || "Pending"}</td>
                             <td>
                               <span className={`badge ${getBadgeClass(l.status)}`}>
                                 {getBadgeLabel(l.status)}

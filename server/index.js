@@ -304,6 +304,88 @@ Allora Support`,
   }
 });
 
+app.post("/provider/register-notify", async (req, res) => {
+  const { email, businessName, ownerName } = req.body || {};
+
+  if (!email) {
+    return res.status(400).json({ message: "Email is required." });
+  }
+
+  const safeName = businessName || "your business";
+  const owner = ownerName || "you";
+  const mailPayload = {
+    from: process.env.MAIL_USER,
+    to: email,
+    subject: "We received your provider registration",
+    text: `Kia ora ${owner},
+
+Thanks for registering ${safeName} as a provider with the Allora Service Hub.
+Your submission is pending review. We'll email you once it's approved.
+
+Nga mihi,
+Allora Support`,
+    html: `<p>Kia ora ${owner},</p>
+           <p>Thanks for registering <strong>${safeName}</strong> as a provider with the Allora Service Hub.</p>
+           <p>Your submission is pending review. We'll email you once it's approved.</p>
+           <p style="margin-top:20px;">Nga mihi,<br/>Allora Support</p>`,
+  };
+
+  try {
+    await sendMailWithTimeout(mailPayload);
+    return res.json({ message: "Registration email sent." });
+  } catch (error) {
+    console.warn("[provider-register] Failed to send registration email:", error.message);
+    return res.status(500).json({ message: "Could not send email right now." });
+  }
+});
+
+app.post("/requests/notify", async (req, res) => {
+  const { name, email, phone, city, service, providerEmail, details } = req.body || {};
+
+  if (!name || !email || !service || !details) {
+    return res.status(400).json({ message: "Name, email, service, and details are required." });
+  }
+
+  const recipient = providerEmail || process.env.MAIL_USER;
+  if (!recipient) {
+    return res.status(500).json({ message: "No provider email configured." });
+  }
+
+  const subject = `New request for ${service}`;
+  const text = `A customer submitted a request.
+Name: ${name}
+Email: ${email}
+Phone: ${phone || "Not provided"}
+City: ${city || "Not provided"}
+Service: ${service}
+
+Details:
+${details}
+`;
+  const html = `<p>A new customer request was submitted.</p>
+    <p><strong>Name:</strong> ${name}<br/>
+    <strong>Email:</strong> ${email}<br/>
+    <strong>Phone:</strong> ${phone || "Not provided"}<br/>
+    <strong>City:</strong> ${city || "Not provided"}<br/>
+    <strong>Service:</strong> ${service}</p>
+    <p><strong>Details:</strong><br/>${(details || "").replace(/\n/g, "<br/>")}</p>`;
+
+  try {
+    await sendMailWithTimeout({
+      from: process.env.MAIL_USER,
+      to: recipient,
+      subject,
+      text,
+      html,
+      replyTo: email,
+    });
+    return res.json({ message: "Request sent." });
+  } catch (error) {
+    console.error("[request-notify] Failed to send request email:", error.message);
+    return res.status(500).json({ message: "Could not send request to provider." });
+  }
+});
 app.listen(port, () => {
   console.log(`Password reset service running on http://localhost:${port}`);
 });
+

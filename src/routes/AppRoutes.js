@@ -4,7 +4,7 @@ import Login from "../pages/Customer/Login";
 import Signup from "../pages/Customer/Signup";
 import DiscoverLanding from "../pages/Customer/DiscoverLanding";
 import CustomerDashboard from "../pages/Customer/Dashboard";
-import About from "../pages/Customer/About";
+import AboutUs from "../pages/About/AboutUs";
 import Services from "../pages/Customer/Services";
 import GetStarted from "../pages/Customer/GetStarted";
 import Insights from "../pages/Customer/Insights";
@@ -33,7 +33,7 @@ export default function AppRoutes() {
         <Route path="/discover" element={<DiscoverLanding />} />
         <Route path="/login" element={<Login defaultMode="login" />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/about" element={<About />} />
+        <Route path="/about" element={<AboutUs />} />
         <Route path="/services" element={<Services />} />
         <Route path="/help" element={<PublicSupportPage />} />
         <Route path="/get-started" element={<GetStarted />} />

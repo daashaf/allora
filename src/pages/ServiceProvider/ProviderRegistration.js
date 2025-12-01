@@ -4,6 +4,8 @@ import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import { addServiceProvider } from "../../serviceProviderCRUD";
 import "../Customer/Login.css";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
+
 export default function ProviderRegistration() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -37,6 +39,18 @@ export default function ProviderRegistration() {
         ...formData,
         status: "Pending",
         providerId: `SP-${Date.now()}`,
+      });
+      // Fire off a confirmation email; non-blocking for local demo storage.
+      fetch(`${API_BASE}/provider/register-notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          businessName: formData.businessName,
+          ownerName: formData.ownerName,
+        }),
+      }).catch(() => {
+        // Ignore email failures in the UI; logged server-side.
       });
       setMessage("Thanks! Your provider registration was submitted and is pending review.");
       setFormData({

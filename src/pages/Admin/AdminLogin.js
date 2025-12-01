@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import "../Customer/Login.css";
 import { auth, db } from "../../firebase";
@@ -13,6 +13,12 @@ export default function AdminLogin() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const allowedAdminEmails = (
+    process.env.REACT_APP_ADMIN_EMAILS || process.env.REACT_APP_ADMIN_EMAIL || ""
+  )
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
 
   useEffect(() => {
     if (!auth || !db) return undefined;
@@ -43,6 +49,20 @@ export default function AdminLogin() {
     return data.role || data.Role || data.userType || null;
   };
 
+  const upsertUserRole = async (uid, emailAddress, role) => {
+    if (!db || !uid) return null;
+    const userRef = doc(db, "users", uid);
+    await setDoc(
+      userRef,
+      {
+        email: emailAddress || "",
+        role,
+      },
+      { merge: true }
+    );
+    return role;
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
@@ -63,6 +83,9 @@ export default function AdminLogin() {
       const role = await getUserRole(credential.user.uid);
 
       if (role === "Administrator") {
+        navigate("/admin/dashboard", { replace: true });
+      } else if (allowedAdminEmails.includes(email.trim().toLowerCase())) {
+        await upsertUserRole(credential.user.uid, email.trim(), "Administrator");
         navigate("/admin/dashboard", { replace: true });
       } else {
         setError("This account is not authorized for administrator access.");
