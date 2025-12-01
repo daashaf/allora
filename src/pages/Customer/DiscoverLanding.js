@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import NavigationBar from "../../components/NavigationBar";
+import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import "./CustomerDashboard.css";
 
 const demoServices = [
@@ -88,16 +89,19 @@ const journeySteps = [
     title: "Share your job",
     copy: "Add location, timing, and budget (or drop photos). Intake takes under a minute.",
     visual: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=900&q=80",
+    note: "Intake under 60 seconds",
   },
   {
     title: "Review vetted pros",
-    copy: "Within an hour we send 3–5 verified providers with pricing, reviews, and availability.",
+    copy: "Within an hour we send 3-5 verified providers with pricing, reviews, and availability.",
     visual: "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=900&q=80",
+    note: "Shortlist arrives in under an hour",
   },
   {
     title: "Book, track, and pay",
-    copy: "Approve milestones, chat in one thread, and pay once work is done—Allora monitors the timeline.",
+    copy: "Approve milestones, chat in one thread, and pay once work is done - Allora monitors the timeline.",
     visual: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=900&q=80",
+    note: "Concierge tracks until close-out",
   },
 ];
 
@@ -206,6 +210,40 @@ export default function DiscoverLanding() {
             </form>
           </section>
 
+          <section className="modern-steps" aria-label="How Allora works">
+            <div className="modern-steps-shell">
+              <InfinityLogo className="modern-steps-logo" aria-hidden="true" />
+              <div className="modern-steps-header">
+                <p className="modern-steps-kicker">How it works</p>
+                <h2>From request to done</h2>
+                <p>Track a simple path with Allora watching every milestone.</p>
+              </div>
+              <div className="modern-steps-stack" role="list">
+                {journeySteps.map((step, index) => (
+                  <article key={step.title} className="compact-step" role="listitem">
+                    <div className="compact-step-header">
+                      <span className="compact-step-number">{`0${index + 1}`}</span>
+                      <div>
+                        <h3>{step.title}</h3>
+                        <p className="compact-step-note">{step.note}</p>
+                      </div>
+                    </div>
+                    <p className="compact-step-copy">{step.copy}</p>
+                  </article>
+                ))}
+              </div>
+
+              <div className="modern-steps-actions">
+                <button type="button" className="ghost" onClick={() => navigate("/get-started")}>
+                  Start a request
+                </button>
+                <button type="button" className="nav-cta" onClick={() => navigate("/services")}>
+                  Hire a provider
+                </button>
+              </div>
+            </div>
+          </section>
+
           <section className="clean-services" aria-label="Featured services">
             <div className="clean-section-heading">
               <h2>Fresh from the concierge desk</h2>
@@ -254,31 +292,10 @@ export default function DiscoverLanding() {
             </div>
           </section>
 
-          <section className="modern-steps" aria-label="How Allora works">
-            <div className="modern-steps-shell">
-              <div className="modern-steps-header">
-                <p className="modern-steps-kicker">How it works</p>
-                <h2>From request to done</h2>
-                <p>Track a simple path with Allora watching every milestone.</p>
-              </div>
-              <div className="modern-steps-track">
-                {journeySteps.map((step, index) => (
-                  <article key={step.title} className="modern-step">
-                    <div className="modern-step-visual">
-                      <img src={step.visual} alt={step.title} loading="lazy" />
-                    </div>
-                    <div className="modern-step-body">
-                      <div className="modern-step-badge">{`0${index + 1}`}</div>
-                      <h3>{step.title}</h3>
-                      <p>{step.copy}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </section>
+          
         </main>
       </div>
     </div>
   );
 }
+

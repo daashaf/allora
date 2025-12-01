@@ -1,8 +1,10 @@
-import React, { useState } from "react";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import React, { useEffect, useState } from "react";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import "../Customer/Login.css";
+import { auth, db } from "../../firebase";
 
 export default function AgentLogin() {
   const [email, setEmail] = useState("");
@@ -12,14 +14,53 @@ export default function AgentLogin() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (!auth || !db) return undefined;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        const role = snap.exists() ? snap.data()?.role || snap.data()?.Role || snap.data()?.userType : null;
+        if (role === "Customer Support") {
+          navigate("/agent-dashboard", { replace: true });
+        }
+      } catch (err) {
+        console.warn("[AgentLogin] Failed to pre-check role", err);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  const getUserRole = async (uid) => {
+    if (!db) return null;
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return data.role || data.Role || data.userType || null;
+  };
+
   const handleLogin = async (event) => {
     event.preventDefault();
     setError("");
+
+    if (!auth || !db) {
+      setError("Firebase is not configured. Add your keys to enable agent login.");
+      return;
+    }
+
     try {
       setSubmitting(true);
-      const auth = getAuth();
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate("/support", { replace: true });
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const role = await getUserRole(credential.user.uid);
+
+      if (role === "Customer Support") {
+        navigate("/agent-dashboard", { replace: true });
+      } else {
+        setError("This account is not authorized for agent access.");
+        await signOut(auth);
+      }
     } catch (err) {
       setError("Invalid email or password. Please try again.");
     } finally {

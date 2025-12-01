@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, getDocs, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import NavigationBar from "../../components/NavigationBar";
 import "./SupportDashboard.css";
@@ -16,12 +16,18 @@ export default function AgentDashboard() {
   );
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "tickets"), (snapshot) => {
-      const data = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      setTickets(data);
-    });
-    return () => unsubscribe();
-  }, []);
+    const fetchTickets = async () => {
+      if (!db) return;
+      try {
+        const snap = await getDocs(collection(db, "tickets"));
+        const data = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+        setTickets(data);
+      } catch (error) {
+        console.error("[AgentDashboard] Ticket fetch error", error);
+      }
+    };
+    fetchTickets();
+  }, [db]);
 
   const handleLogout = () => navigate("/agent-login");
 

@@ -5,7 +5,6 @@ import {
     getFirestore,
     collection,
     getDocs,
-    onSnapshot,
     addDoc,
     doc,
     getDoc,
@@ -105,54 +104,59 @@ function SupportDashboard() {
 
     //  FETCH TICKETS (REAL-TIME) 
     useEffect(() => {
-        const currentUser = auth.currentUser;
-        if (!currentUser) return;
-
-        const unsub = onSnapshot(
-            collection(db, "tickets"),
-            (snapshot) => {
-                const data = snapshot.docs
-                    .map((doc) => ({ id: doc.id, ...doc.data() }))
-                    .filter((t) => t.userEmail === currentUser.email);
+        const fetchTickets = async () => {
+            if (!db) return;
+            try {
+                const snap = await getDocs(collection(db, "FAQ"));
+                const data = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
                 setTickets(data);
-            },
-            (error) => {
-                console.error("Error fetching tickets:", error);
+            } catch (error) {
+                console.error("[SupportDashboard] Error fetching tickets:", error);
             }
-        );
-        return () => unsub();
-    }, [db, auth]);
-
-    //  FETCH NOTIFICATIONS (REAL-TIME) 
-    useEffect(() => {
-        const unsub = onSnapshot(collection(db, "notifications"), (snapshot) => {
-            const data = snapshot.docs.map((doc) => doc.data().message || "");
-            setNotifications(data);
-        });
-        return () => unsub();
+        };
+        fetchTickets();
     }, [db]);
 
-    //  FETCH FAQ TOPICS (REAL-TIME) 
+    //  FETCH NOTIFICATIONS (one-time) 
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, "supportTopics"), (snapshot) => {
-            const topicsData = snapshot.docs.map((doc) => {
-                const item = doc.data();
-                return {
-                    id: doc.id,
-                    title: item.title || "Untitled Topic",
-                    desc: item.desc || "",
-                    faqs: item.FAQS || item.faqs || [],
-                };
-            });
-
-            if (topicsData.length) {
-                setSupportTopics(topicsData);
-            } else {
-                setSupportTopics(FALLBACK_SUPPORT_TOPICS);
+        const fetchNotifications = async () => {
+            if (!db) return;
+            try {
+                const snap = await getDocs(collection(db, "notifications"));
+                const data = snap.docs.map((doc) => doc.data().message || "");
+                setNotifications(data);
+            } catch (error) {
+                console.error("[SupportDashboard] Notifications fetch error", error);
             }
-        });
+        };
+        fetchNotifications();
+    }, [db]);
 
-        return () => unsub();
+    //  FETCH FAQ TOPICS (one-time) 
+    useEffect(() => {
+        const fetchTopics = async () => {
+            if (!db) return;
+            try {
+                const snap = await getDocs(collection(db, "supportTopics"));
+                const topicsData = snap.docs.map((doc) => {
+                    const item = doc.data();
+                    return {
+                        id: doc.id,
+                        title: item.title || "Untitled Topic",
+                        desc: item.desc || "",
+                        faqs: item.FAQS || item.faqs || [],
+                    };
+                });
+                if (topicsData.length) {
+                    setSupportTopics(topicsData);
+                } else {
+                    setSupportTopics(FALLBACK_SUPPORT_TOPICS);
+                }
+            } catch (error) {
+                console.error("[SupportDashboard] FAQ fetch error", error);
+            }
+        };
+        fetchTopics();
     }, [db]);
 
     // Ensure a topic is always selected when data loads/changes
@@ -182,7 +186,7 @@ function SupportDashboard() {
         }
         try {
             const currentUser = auth.currentUser;
-            await addDoc(collection(db, "tickets"), {
+            await addDoc(collection(db, "FAQ"), {
                 subject: newTicket.subject,
                 description: newTicket.description,
                 status: newTicket.status,
@@ -244,8 +248,6 @@ function SupportDashboard() {
             
             {/*  HEADER  */}
             <header className="support-header">
-                <h2 className="support-title">Customer Support Dashboard</h2>
-
                 <div className="header-right">
                     {headerUserEmail && <span className="header-user">Welcome back, {headerUserEmail}.</span>}
 
@@ -254,7 +256,7 @@ function SupportDashboard() {
                         className="bi bi-journal-text header-icon"
                         title="My Tickets"
                         onClick={() => {
-                            setShowTickets(true);
+                            setShowTickets((prev) => !prev);
                             setShowNotifications(false);
                             setShowLogout(false);
                         }}
@@ -339,32 +341,35 @@ function SupportDashboard() {
 
                     )
                 ) : supportTopics.length ? (
-                    <div className="support-grid">
-                                {supportTopics.map((topic, index) => (
-                                    <div
-                                        key={index}
-                                        className={`support-card ${activeTopic === index ? "active" : ""}`}
+                    <div className="support-accordion">
+                        {supportTopics.map((topic, index) => {
+                            const isOpen = activeTopic === index;
+                            return (
+                                <div key={index} className={`support-accordion-item ${isOpen ? "open" : ""}`}>
+                                    <button
+                                        type="button"
+                                        className="support-accordion-trigger"
                                         onClick={() => setActiveTopic(index)}
                                     >
-                                        <h3>{topic.title}</h3>
-                                        <p>{topic.desc}</p>
-
-                                        {activeTopic === index && (
-                                            <div className="faq-section">
-                                                {(topic.faqs || []).map((faq, i) => (
-                                                    <div key={i} className="faq-item">
-                                                        <div className="faq-question">
-                                                            <span>{faq.Q || faq.q}</span>
-                                                        </div>
-                                                        <div className="faq-answer show">
-                                                            <p>{faq.A || faq.a}</p>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+                                        <span>
+                                            <strong>{topic.title}</strong>
+                                            <small>{topic.desc}</small>
+                                        </span>
+                                        <span className="chevron">{isOpen ? "▾" : "▸"}</span>
+                                    </button>
+                                    {isOpen && (
+                                        <div className="support-accordion-faqs">
+                                            {(topic.faqs || []).map((faq, i) => (
+                                                <div key={i} className="faq-row">
+                                                    <p className="faq-q">{faq.Q || faq.q}</p>
+                                                    <p className="faq-a">{faq.A || faq.a}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="support-empty-state">
@@ -412,13 +417,13 @@ function SupportDashboard() {
                             </thead>
                             <tbody>
                                 {tickets.map((t) => (
-                                    <tr key={t.id}>
-                                        <td>{t.userName || "Not Provided"}</td>
-                                        <td>{t.userEmail || "Not Provided"}</td>
-                                        <td>{t.userPhone || "Not Provided"}</td>
-                                        <td>{t.subject}</td>
-                                        <td>{t.status}</td>
-                                        <td>{formatDate(t.createdAt)}</td>
+                                <tr key={t.id}>
+                                    <td>{t.userName || "Not Provided"}</td>
+                                    <td>{t.userEmail || "Not Provided"}</td>
+                                    <td>{t.userPhone || "Not Provided"}</td>
+                                    <td>{t.subject}</td>
+                                    <td>{t.status || "FAQ"}</td>
+                                    <td>{formatDate(t.createdAt)}</td>
 
                                         <td>   {/*  NEW */}
                                             {t.status === "Resolved" ? (

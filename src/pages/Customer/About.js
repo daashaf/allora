@@ -84,8 +84,8 @@ export default function About() {
       <NavigationBar />
 
       <main className="about-shell">
-        <section className="about-hero">
-          <div className="about-hero-text">
+        <section className="about-hero-band">
+          <div className="about-hero-copy">
             <p className="about-tag">About Allora</p>
             <h1>Concierge-grade service for every booking.</h1>
             <p className="about-lede">
@@ -102,30 +102,26 @@ export default function About() {
               </a>
             </div>
 
-            <div className="about-hero-points">
+            <div className="about-pillars">
               {heroPoints.map((point) => (
-                <div key={point.title} className="about-point">
+                <article key={point.title} className="about-pillar">
                   <span className="about-point-dot" aria-hidden="true" />
                   <div>
                     <p className="about-point-title">{point.title}</p>
                     <p className="about-point-copy">{point.copy}</p>
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           </div>
 
-          <div className="about-hero-right">
-            <div className="about-card about-snapshot">
+          <div className="about-hero-panel">
+            <div className="about-glass-card about-live-card">
               <div className="about-card-head">
-                <div>
-                  <p className="about-tag subtle">Live operations</p>
-                  <h3>Concierge overview</h3>
-                </div>
+                <p className="about-tag subtle">Live operations</p>
                 <span className="about-badge">Active</span>
               </div>
-
-              <div className="about-card-metrics">
+              <div className="about-live-stats">
                 <div>
                   <p className="about-metric-value">12 min</p>
                   <p className="about-metric-label">Median response</p>
@@ -139,7 +135,6 @@ export default function About() {
                   <p className="about-metric-label">Bookings monitored</p>
                 </div>
               </div>
-
               <div className="about-footprint">
                 <p className="about-footprint-label">City footprint</p>
                 <div className="about-chip-row">
@@ -167,8 +162,8 @@ export default function About() {
           </div>
         </section>
 
-        <section className="about-metrics">
-          <div className="about-section-header">
+        <section className="about-proof">
+          <div className="about-section-header narrow">
             <p className="about-tag subtle">Proof points</p>
             <h2>Numbers that anchor how we work.</h2>
             <p>
@@ -186,23 +181,7 @@ export default function About() {
           </div>
         </section>
 
-        <section className="about-values">
-          <div className="about-section-header">
-            <p className="about-tag subtle">Operating system</p>
-            <h2>The beliefs that shape every interaction.</h2>
-            <p>Simple principles keep Allora warm, dependable, and clear - whether you are booking or fulfilling.</p>
-          </div>
-          <div className="about-values-grid">
-            {values.map((item) => (
-              <article key={item.title} className="about-value-card">
-                <h3>{item.title}</h3>
-                <p>{item.copy}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="about-story">
+        <section className="about-story-block">
           <div className="about-story-media">
             <img
               src={storyImage}
@@ -235,23 +214,24 @@ export default function About() {
           </div>
         </section>
 
-        <section className="about-journey">
-          <div className="about-section-header center">
-            <p className="about-tag subtle">Milestones</p>
-            <h2>From hallway experiments to a national platform.</h2>
+        <section className="about-operating">
+          <div className="about-values-panel">
+            <div className="about-section-header">
+              <p className="about-tag subtle">Operating system</p>
+              <h2>The beliefs that shape every interaction.</h2>
+              <p>Simple principles keep Allora warm, dependable, and clear - whether you are booking or fulfilling.</p>
+            </div>
+            <div className="about-values-grid">
+              {values.map((item) => (
+                <article key={item.title} className="about-value-card">
+                  <h3>{item.title}</h3>
+                  <p>{item.copy}</p>
+                </article>
+              ))}
+            </div>
           </div>
-          <div className="about-journey-grid">
-            {journey.map((item) => (
-              <article key={item.year} className="about-journey-card">
-                <span>{item.year}</span>
-                <p>{item.text}</p>
-              </article>
-            ))}
-          </div>
-        </section>
 
-        <section className="about-ops">
-          <div className="about-ops-card">
+          <div className="about-ops-panel">
             <div className="about-ops-text">
               <p className="about-tag subtle">How we operate</p>
               <h2>Concierge hearts with an operator's discipline.</h2>
@@ -284,6 +264,50 @@ export default function About() {
                   <span style={{ width: "86%" }} />
                 </div>
                 <p className="about-ops-meter-copy">Concierge team resolves 86% of issues without escalations.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="about-journey-band">
+          <div className="about-section-header center">
+            <p className="about-tag subtle">Milestones</p>
+            <h2>From hallway experiments to a national platform.</h2>
+          </div>
+          <div className="about-journey-timeline">
+            {journey.map((item) => (
+              <article key={item.year} className="about-journey-stop">
+                <span className="about-journey-year">{item.year}</span>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="about-footprint-band">
+          <div className="about-footprint-card">
+            <div className="about-footprint-text">
+              <p className="about-tag subtle">Coverage</p>
+              <h2>Where concierge teams are live.</h2>
+              <p>Concierge coverage stays 24/7 with regional specialists who keep every request moving.</p>
+            </div>
+            <div className="about-footprint-grid">
+              <div className="about-footprint-list">
+                {coverageCities.map((city) => (
+                  <span key={city} className="about-chip">
+                    {city}
+                  </span>
+                ))}
+              </div>
+              <div className="about-footprint-meta">
+                <div>
+                  <p className="about-metric-value">12 min</p>
+                  <p className="about-metric-label">Median response</p>
+                </div>
+                <div>
+                  <p className="about-metric-value">24/7</p>
+                  <p className="about-metric-label">Concierge line</p>
+                </div>
               </div>
             </div>
           </div>

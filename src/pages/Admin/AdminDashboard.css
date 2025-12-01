@@ -12,6 +12,9 @@
 .admin-dashboard-page {
   background: #f8fbff;
   min-height: 100vh;
+  /* Override support-page overflow: hidden so the admin view can scroll */
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .admin-dashboard-shell {
@@ -194,6 +197,7 @@
   border: 1px solid #e6ecf7;
   box-shadow: 0 16px 40px rgba(17, 42, 94, 0.08);
   padding: 18px;
+  overflow: visible;
 }
 
 .admin-panel-card h4 {
