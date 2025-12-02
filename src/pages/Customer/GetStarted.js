@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { addDoc, collection, onSnapshot, query, serverTimestamp } from "firebase/firestore";
 import NavigationBar from "../../components/NavigationBar";
+import { addBooking, calculateCommission, parsePrice, COMMISSION_RATE } from "../../commission";
 import { db, ensureFirebaseAuth } from "../../firebase";
 import "./CustomerDashboard.css";
 
@@ -39,6 +40,17 @@ export default function GetStarted() {
   const location = useLocation();
 
   const prefillService = location?.state?.prefill || "";
+  const prefillBasePrice = location?.state?.basePrice || "";
+  const prefillTotalPrice = location?.state?.totalPrice || "";
+  const prefillProviderId = location?.state?.providerId || "";
+  const prefillProviderName = location?.state?.providerName || "";
+  const prefillProviderEmail = location?.state?.providerEmail || "";
+
+  const prefillTotals = prefillBasePrice
+    ? calculateCommission(prefillBasePrice, COMMISSION_RATE)
+    : prefillTotalPrice
+    ? { totalPrice: parsePrice(prefillTotalPrice) }
+    : null;
 
   const [formData, setFormData] = useState({
     name: "",
@@ -46,8 +58,15 @@ export default function GetStarted() {
     phone: "",
     city: "",
     service: prefillService,
-    providerEmail: "",
+    providerEmail: prefillProviderEmail,
+    providerId: prefillProviderId,
+    providerName: prefillProviderName,
     details: "",
+    quotedPrice: prefillTotals?.totalPrice
+      ? String(prefillTotals.totalPrice)
+      : prefillBasePrice
+      ? String(prefillBasePrice)
+      : "",
   });
   const [serviceOptions, setServiceOptions] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -93,6 +112,14 @@ export default function GetStarted() {
     return formData.name && formData.email && formData.service && formData.details;
   }, [formData]);
 
+  const pricing = useMemo(() => {
+    const customerPrice = parsePrice(
+      formData.quotedPrice || prefillTotalPrice || prefillBasePrice || 0
+    );
+    const basePrice = customerPrice > 0 ? customerPrice / (1 + COMMISSION_RATE) : 0;
+    return calculateCommission(basePrice, COMMISSION_RATE);
+  }, [formData.quotedPrice, prefillBasePrice, prefillTotalPrice]);
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -110,20 +137,89 @@ export default function GetStarted() {
 
     setSubmitting(true);
     try {
-      await ensureFirebaseAuth();
-      if (db) {
-        await addDoc(collection(db, "ServiceRequests"), {
-          ...formData,
-          createdAt: serverTimestamp(),
-          status: "New",
-        });
+      // Try auth but don't fail the request if auth isn't ready (use public rules/demo).
+      try {
+        await ensureFirebaseAuth();
+      } catch (authErr) {
+        console.warn("[GetStarted] auth not ready, continuing", authErr);
       }
 
-      await fetch("/requests/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+      let savedToFirestore = false;
+
+      if (db) {
+        try {
+          await addDoc(collection(db, "ServiceRequests"), {
+            ...formData,
+            createdAt: serverTimestamp(),
+            status: "New",
+            basePrice: pricing.basePrice,
+            totalPrice: pricing.totalPrice,
+            commissionAmount: pricing.commissionAmount,
+            commissionRate: pricing.commissionRate,
+          });
+
+          await addDoc(collection(db, "Order"), {
+            email: formData.email,
+            phone: formData.phone || "",
+            city: formData.city || "",
+            service: formData.service,
+            description: formData.details,
+            providerEmail: (formData.providerEmail || "").toLowerCase(),
+            priceToPay: pricing.totalPrice,
+            fullPrice: pricing.totalPrice,
+            basePrice: pricing.basePrice,
+            commissionAmount: pricing.commissionAmount,
+            commissionRate: pricing.commissionRate,
+            createdAt: serverTimestamp(),
+            status: "Pending",
+          });
+
+          if (formData.providerEmail) {
+            await addDoc(collection(db, "Notification"), {
+              audience: "Service Providers",
+              providerEmail: formData.providerEmail.toLowerCase(),
+              subject: "New booking request",
+              message: `${formData.name} requested ${formData.service}.`,
+              status: "New",
+              sentAt: serverTimestamp(),
+            });
+          }
+          savedToFirestore = true;
+        } catch (firestoreErr) {
+          console.warn("[GetStarted] Firestore save failed, will still continue", firestoreErr);
+        }
+      }
+
+      // Send email notification best-effort; do not fail the booking on email issues.
+      try {
+        await fetch("/requests/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+      } catch (notifyErr) {
+        console.warn("[GetStarted] Request email failed (ignored)", notifyErr);
+      }
+
+      await addBooking({
+        service: formData.service,
+        providerEmail: formData.providerEmail || prefillProviderEmail,
+        providerId: formData.providerId || prefillProviderId,
+        providerName: formData.providerName || prefillProviderName,
+        customerName: formData.name,
+        customerEmail: formData.email,
+        city: formData.city,
+        basePrice: pricing.basePrice,
+        totalPrice: pricing.totalPrice,
+        commissionAmount: pricing.commissionAmount,
+        commissionRate: pricing.commissionRate,
+        status: "Booked",
+        source: "GetStarted",
       });
+
+      if (!savedToFirestore && !db) {
+        console.warn("[GetStarted] No Firestore available; booking stored locally only.");
+      }
 
       setMessage("Your request has been sent to the provider. We'll follow up shortly.");
       setFormData({
@@ -133,7 +229,10 @@ export default function GetStarted() {
         city: "",
         service: prefillService,
         providerEmail: "",
+        providerId: "",
+        providerName: "",
         details: "",
+        quotedPrice: "",
       });
       setTimeout(() => navigate("/services"), 800);
     } catch (submitError) {
@@ -221,6 +320,41 @@ export default function GetStarted() {
                 onChange={handleChange}
                 placeholder="If you have a preferred provider"
               />
+            </div>
+
+            <div className="form-row two-col">
+              <div>
+                <label htmlFor="quotedPrice">Price to pay</label>
+                <input
+                  id="quotedPrice"
+                  name="quotedPrice"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={formData.quotedPrice}
+                  onChange={handleChange}
+                  placeholder="Total price for this booking"
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <label style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Full price (shown to customer)</label>
+                <div
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    background: "#f8fafc",
+                    fontWeight: 700,
+                    color: "#0f172a",
+                  }}
+                >
+                  ${pricing.totalPrice.toFixed(2)}
+                  <span style={{ display: "block", fontSize: 12, fontWeight: 400, color: "#475569" }}>
+                    Standard fee is already included. We split payouts automatically.
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="form-row">

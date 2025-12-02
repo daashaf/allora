@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -6,12 +6,19 @@ import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
 import { auth, db } from "../firebase";
 import "./NavigationBar.css";
 
-export default function NavigationBar({ activeSection, onSectionSelect, notificationCount = 0 }) {
+export default function NavigationBar({
+  activeSection,
+  onSectionSelect,
+  notificationCount = 0,
+  notifications = [],
+  onNotificationsViewed,
+}) {
   const [isNavCollapsed, setIsNavCollapsed] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
   const [loginSelection, setLoginSelection] = useState("customer");
   const [showLoginMenu, setShowLoginMenu] = useState(false);
+  const [showNotificationList, setShowNotificationList] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -92,11 +99,10 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
     setIsNavCollapsed((previous) => !previous);
   };
 
-  const handleNotificationsClick = () => {
-    setIsNavCollapsed(true);
-    if (isAdminView) {
+  const goToNotificationsPanel = () => {
+    if (isAdminView || isAgentView) {
       const targetSearch = "?target=notifications";
-      const onAdminDashboard = location.pathname.startsWith("/admin/dashboard");
+      const onAdminDashboard = isAdminView && location.pathname.startsWith("/admin/dashboard");
       if (onAdminDashboard) {
         const panel = document.getElementById("admin-notifications-panel");
         if (panel) {
@@ -108,18 +114,40 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
       } else {
         navigate(`/admin/dashboard${targetSearch}`);
       }
-    } else if (isAgentView) {
-      navigate("/agent-dashboard");
-    } else if (isProviderView) {
-      navigate("/provider/dashboard");
     } else {
-      navigate("/support");
+      setShowNotificationList(false);
+    }
+  };
+
+  const handleNotificationsClick = () => {
+    setIsNavCollapsed(true);
+    if (!isAdminView && !isAgentView) {
+      setShowNotificationList((open) => !open);
+    }
+    if (typeof onNotificationsViewed === "function") {
+      onNotificationsViewed();
+    }
+    if (isAdminView || isAgentView) {
+      const targetSearch = "?target=notifications";
+      const onAdminDashboard = isAdminView && location.pathname.startsWith("/admin/dashboard");
+      if (onAdminDashboard) {
+        const panel = document.getElementById("admin-notifications-panel");
+        if (panel) {
+          panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        if (location.search !== targetSearch) {
+          navigate(`/admin/dashboard${targetSearch}`);
+        }
+      } else {
+        navigate(`/admin/dashboard${targetSearch}`);
+      }
     }
   };
 
   useEffect(() => {
     setIsNavCollapsed(true);
     setShowLoginMenu(false);
+    setShowNotificationList(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -232,6 +260,8 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
     );
   };
 
+  const recentNotifications = useMemo(() => notifications.slice(0, 5), [notifications]);
+
   return (
     <header className="dashboard-nav navbar navbar-expand-lg navbar-light sticky-top">
       <div className="container-fluid">
@@ -274,42 +304,70 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
                   </div>
                 )}
                 <div className="nav-support-actions">
-                  <button
-                    type="button"
-                    className="nav-icon-btn"
-                    aria-label="Notifications"
-                    title="Notifications"
-                    onClick={handleNotificationsClick}
-                  >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      aria-hidden="true"
+                  <div className="nav-notification-wrapper">
+                    <button
+                      type="button"
+                      className="nav-icon-btn"
+                      aria-label="Notifications"
+                      title="Notifications"
+                      onClick={handleNotificationsClick}
                     >
-                      <path
-                        d="M12 4a6 6 0 00-6 6v3.382l-.723 1.447A1 1 0 006.173 17h11.654a1 1 0 00.896-1.471L18 13.382V10a6 6 0 00-6-6z"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M10 19a2 2 0 004 0"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    {notificationCount > 0 && (
-                      <span className="nav-icon-badge" aria-label={`${notificationCount} notifications`}>
-                        {notificationCount}
-                      </span>
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12 4a6 6 0 00-6 6v3.382l-.723 1.447A1 1 0 006.173 17h11.654a1 1 0 00.896-1.471L18 13.382V10a6 6 0 00-6-6z"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M10 19a2 2 0 004 0"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      {notificationCount > 0 && (
+                        <span className="nav-icon-badge" aria-label={`${notificationCount} notifications`}>
+                          {notificationCount}
+                        </span>
+                      )}
+                    </button>
+                    {showNotificationList && recentNotifications.length > 0 && (
+                      <div className="nav-notification-popover">
+                        {recentNotifications.map((n) => (
+                          <div key={n.id} className="nav-notification-item">
+                            <p className="nav-notification-subject">{n.subject || "Notification"}</p>
+                            <p className="nav-notification-message">
+                              {n.message || n.audience || "New update available."}
+                            </p>
+                            <span className="nav-notification-meta">{n.sentAt || "Just now"}</span>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="nav-notification-viewall"
+                          onClick={() => {
+                            setShowNotificationList(false);
+                            if (typeof onNotificationsViewed === "function") {
+                              onNotificationsViewed();
+                            }
+                            goToNotificationsPanel();
+                          }}
+                        >
+                          View all
+                        </button>
+                      </div>
                     )}
-                  </button>
+                  </div>
                   {/* Menu icon removed per request */}
                   <button type="button" className="dashboard-nav-link nav-support-logout" onClick={handleLogout}>
                     Logout
@@ -363,4 +421,3 @@ export default function NavigationBar({ activeSection, onSectionSelect, notifica
     </header>
   );
 }
-

@@ -385,6 +385,106 @@ ${details}
     return res.status(500).json({ message: "Could not send request to provider." });
   }
 });
+
+app.post("/support/create", async (req, res) => {
+  const { email, name, password, status } = req.body || {};
+
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required." });
+  }
+
+  try {
+    const userRecord = await authAdmin.createUser({
+      email: email.trim().toLowerCase(),
+      password,
+      displayName: name || "Customer Support",
+      emailVerified: true,
+    });
+
+    await authAdmin.setCustomUserClaims(userRecord.uid, { role: "customer_support" });
+
+    await firestore.collection("users").doc(userRecord.uid).set({
+      name: name || "Customer Support",
+      email: email.trim(),
+      role: "Customer Support",
+      status: status || "Active",
+      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const safeName = name || "there";
+    const mailPayload = {
+      from: process.env.MAIL_USER,
+      to: email,
+      subject: "You have been added as Customer Support",
+      text: `Kia ora ${safeName},
+
+You've been added as a Customer Support member for the Allora Service Hub.
+
+Your temporary password is: ${password}
+
+You can sign in now and change it from your profile page. If you forget it, request a reset using this email on the login page.
+
+Nga mihi,
+Allora Team`,
+      html: `<p>Kia ora ${safeName},</p>
+             <p>You've been added as a <strong>Customer Support</strong> member for the Allora Service Hub.</p>
+             <p><strong>Your temporary password is:</strong> ${password}</p>
+             <p>You can sign in now and change it from your profile page. If you forget it, request a reset using this email on the login page.</p>
+             <p style="margin-top:20px;">Nga mihi,<br/>Allora Team</p>`,
+    };
+
+    try {
+      await sendMailWithTimeout(mailPayload);
+    } catch (mailError) {
+      console.warn("[support-create] User created, email failed:", mailError.message);
+      return res
+        .status(200)
+        .json({ message: "Support member created, but email failed to send.", uid: userRecord.uid });
+    }
+
+    return res.json({ message: "Support member created and notified.", uid: userRecord.uid });
+  } catch (error) {
+    console.error("[support-create] Failed to create support user:", error.message);
+    const status = error.code === "auth/email-already-exists" ? 409 : 500;
+    return res.status(status).json({ message: error.message || "Unable to create support user." });
+  }
+});
+
+app.post("/support/notify-created", async (req, res) => {
+  const { email, name } = req.body || {};
+
+  if (!email) {
+    return res.status(400).json({ message: "Email is required to notify the support member." });
+  }
+
+  const safeName = name || "there";
+  const mailPayload = {
+    from: process.env.MAIL_USER,
+    to: email,
+    subject: "You have been added as Customer Support",
+    text: `Kia ora ${safeName},
+
+You've been added as a Customer Support member for the Allora Service Hub.
+
+You can now sign in with your support credentials. If you don't have a password yet, request a reset on the login page using this email.
+
+Nga mihi,
+Allora Team`,
+    html: `<p>Kia ora ${safeName},</p>
+           <p>You've been added as a <strong>Customer Support</strong> member for the Allora Service Hub.</p>
+           <p>You can now sign in with your support credentials. If you don't have a password yet, request a reset on the login page using this email.</p>
+           <p style="margin-top:20px;">Nga mihi,<br/>Allora Team</p>`,
+  };
+
+  try {
+    await sendMailWithTimeout(mailPayload);
+    return res.json({ message: "Support welcome email sent." });
+  } catch (error) {
+    console.error("[support-notify] Unable to send support welcome email:", error.message);
+    return res.status(500).json({ message: "Could not send support welcome email." });
+  }
+});
 app.listen(port, () => {
   console.log(`Password reset service running on http://localhost:${port}`);
 });

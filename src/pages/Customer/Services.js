@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import NavigationBar from "../../components/NavigationBar";
+import { calculateCommission, parsePrice } from "../../commission";
 import { db, ensureFirebaseAuth } from "../../firebase";
 import "./CustomerDashboard.css";
 
@@ -74,8 +75,19 @@ export default function Services() {
 
   const liveCount = useMemo(() => services.length, [services]);
 
-  const handleHire = (serviceName) => {
-    navigate("/get-started", { state: { prefill: serviceName || "" } });
+  const handleHire = (service) => {
+    const basePrice = parsePrice(service?.price || service?.rate || 0);
+    const { totalPrice } = calculateCommission(basePrice);
+    navigate("/get-started", {
+      state: {
+        prefill: service?.service || service?.serviceName || service || "",
+        providerEmail: service?.email || service?.providerEmail || "",
+        providerName: service?.provider || service?.company || service?.providerName || "",
+        providerId: service?.providerId || service?.providerID || service?.id || "",
+        basePrice,
+        totalPrice,
+      },
+    });
   };
 
   return (
@@ -130,6 +142,11 @@ export default function Services() {
                   const status = (service.status || "Active").toLowerCase();
                   const statusClass =
                     status === "pending" ? "pending" : status === "approved" || status === "active" ? "good" : "neutral";
+                  const basePrice = parsePrice(service.price || service.rate || 0);
+                  const { totalPrice } = calculateCommission(basePrice);
+                  const priceLabel = basePrice
+                    ? `$${totalPrice.toFixed(2)}`
+                    : "Price on request";
 
                   return (
                     <article key={service.id} className="service-card" role="listitem">
@@ -158,10 +175,11 @@ export default function Services() {
                         ) : null}
                         {service.experience ? <span>{service.experience} experience</span> : null}
                         {service.email ? <span>{service.email}</span> : null}
+                        <span>{priceLabel}</span>
                       </div>
 
                       <div className="service-actions">
-                        <button type="button" onClick={() => handleHire(service.service)} className="ghost">
+                        <button type="button" onClick={() => handleHire(service)} className="ghost">
                           Hire this provider
                         </button>
                       </div>

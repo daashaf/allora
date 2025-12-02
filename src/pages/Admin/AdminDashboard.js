@@ -15,6 +15,7 @@ import {
 import { auth, db, ensureFirebaseAuth } from "../../firebase";
 import { useNavigate, useLocation } from "react-router-dom";
 import NavigationBar from "../../components/NavigationBar";
+import { COMMISSION_RATE, formatCurrency, getBookings, summarizeBookings } from "../../commission";
 import { getServiceProviders, updateServiceProvider } from "../../serviceProviderCRUD";
 import "./AdminDashboard.css";
 
@@ -106,11 +107,11 @@ const getBadgeClass = (value, fallback = "unknown") => {
   return trimmed ? trimmed.toLowerCase() : fallback;
 };
 
-const ensureAuth = async () => {
-  const user = await ensureFirebaseAuth();
-  if (!user) {
-    alert(
-      "Firebase authentication is not available. Enable anonymous auth or provide service credentials."
+  const ensureAuth = async () => {
+    const user = await ensureFirebaseAuth();
+    if (!user) {
+      alert(
+        "Firebase authentication is not available. Enable anonymous auth or provide service credentials."
     );
     return false;
   }
@@ -119,6 +120,7 @@ const ensureAuth = async () => {
 
   // User Management data
   const [customers, setCustomers] = useState([]);
+  const [bookings, setBookings] = useState([]);
 
   useEffect(() => {
     if (!db) return undefined;
@@ -153,6 +155,45 @@ const ensureAuth = async () => {
     const target = normalizeRole(userMgmtTab);
     return customers.filter((u) => normalizeRole(u.role) === target);
   }, [customers, userMgmtTab]);
+
+  const addSupportMember = async () => {
+    if (!db) return;
+    if (!(await ensureAuth())) return;
+    const nameInput = window.prompt("Support member name?", "");
+    if (!nameInput) return;
+    const emailInput = window.prompt("Support member email?", "");
+    if (!emailInput) {
+      window.alert("Email is required to create a support account.");
+      return;
+    }
+    const passwordInput = window.prompt(
+      "Temporary password for the support member (min 6 characters)",
+      "Support123!"
+    );
+    if (!passwordInput || passwordInput.length < 6) {
+      window.alert("A password of at least 6 characters is required.");
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/support/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: nameInput.trim(),
+          email: emailInput.trim(),
+          password: passwordInput,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.message || "Could not create support member.");
+      }
+      window.alert("Customer support member created and notified with their password.");
+    } catch (error) {
+      console.error("[Support] Failed to add support user", error);
+      window.alert("Unable to create the support member right now.");
+    }
+  };
 
   // Service Management state + Firestore data
   const SERVICE_COLLECTION = "Services";
@@ -481,6 +522,20 @@ const ensureAuth = async () => {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+    getBookings()
+      .then((list) => {
+        if (mounted) setBookings(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        if (mounted) setBookings([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!db) return undefined;
     const syncMissingServices = async () => {
       if (!(await ensureAuth())) return;
@@ -748,6 +803,12 @@ const ensureAuth = async () => {
     message: "",
   });
   const [notifications, setNotifications] = useState([]);
+  const [lastSeenNotifications, setLastSeenNotifications] = useState(() => {
+    const stored = localStorage.getItem("admin-notifications-last-seen");
+    return stored ? Number(stored) : 0;
+  });
+  const bookingTotals = useMemo(() => summarizeBookings(bookings), [bookings]);
+  const commissionRatePercent = Math.round((COMMISSION_RATE || 0) * 100);
 
   const summaryCards = useMemo(() => {
     const serviceProviders = customers.filter((u) => u.role === "Service Provider").length;
@@ -782,13 +843,28 @@ const ensureAuth = async () => {
         detail: `${issues.length} total`,
       },
       {
+        key: "commission",
+        label: "Commission",
+        value: formatCurrency(bookingTotals.adminTotal),
+        detail: `${commissionRatePercent}% platform fee`,
+      },
+      {
         key: "notifications",
         label: "Notifications Sent",
         value: notifications.length,
         detail: `${roles.length} roles configured`,
       },
     ];
-  }, [customers, services, listings, issues, notifications, roles]);
+  }, [
+    customers,
+    services,
+    listings,
+    issues,
+    notifications,
+    roles,
+    bookingTotals,
+    commissionRatePercent,
+  ]);
 
   const recentNotifications = useMemo(() => notifications.slice(0, 3), [notifications]);
   const recentIssues = useMemo(() => issues.slice(0, 3), [issues]);
@@ -811,15 +887,15 @@ const ensureAuth = async () => {
           return {
             id: docSnap.id,
             subject: data.subject || "",
+            message: data.message || "",
             audience: data.audience || "",
             channel: data.channel || "Email",
             status: data.status || "Sent",
             sentAt: display,
-            _order: order,
+            sentOrder: order,
           };
         })
-        .sort((a, b) => b._order - a._order)
-        .map(({ _order, ...rest }) => rest);
+        .sort((a, b) => b.sentOrder - a.sentOrder);
       setNotifications(docs);
     });
   }, []);
@@ -873,6 +949,16 @@ const ensureAuth = async () => {
     });
   }, []);
 
+  const unreadNotificationCount = useMemo(() => {
+    return notifications.filter((n) => (n.sentOrder || 0) > lastSeenNotifications).length;
+  }, [notifications, lastSeenNotifications]);
+
+  const markNotificationsSeen = () => {
+    const now = Date.now();
+    setLastSeenNotifications(now);
+    localStorage.setItem("admin-notifications-last-seen", String(now));
+  };
+
   const saveSettings = async () => {
     if (!db) return;
     if (!(await ensureAuth())) return;
@@ -899,7 +985,12 @@ const ensureAuth = async () => {
 
   return (
     <div className="support-page admin-dashboard-page">
-      <NavigationBar activeSection="admin" notificationCount={notifications.length} />
+      <NavigationBar
+        activeSection="admin"
+        notificationCount={unreadNotificationCount}
+        notifications={notifications}
+        onNotificationsViewed={markNotificationsSeen}
+      />
       <div className="admin-dashboard-shell">
         <main className="admin-main-content">
         <div className="admin-pill-row">
@@ -1078,6 +1169,33 @@ const ensureAuth = async () => {
                         </table>
                       </div>
                     )}
+
+                    <div className="commission-summary-box">
+                      <div className="commission-head">
+                        <div>
+                          <p className="subtle-label">Commission</p>
+                          <h5 style={{ margin: "0 0 6px" }}>Platform fee on provider bookings</h5>
+                          <p className="commission-subtext">
+                            Applied automatically. Customers see only the full price; {commissionRatePercent}% routes to admin.
+                          </p>
+                        </div>
+                        <div className="commission-rate-pill">{commissionRatePercent}%</div>
+                      </div>
+                      <div className="commission-stats">
+                        <div className="commission-stat-card">
+                          <p>Admin share</p>
+                          <strong>{formatCurrency(bookingTotals.adminTotal)}</strong>
+                        </div>
+                        <div className="commission-stat-card">
+                          <p>Provider payout</p>
+                          <strong>{formatCurrency(bookingTotals.providerTotal)}</strong>
+                        </div>
+                        <div className="commission-stat-card">
+                          <p>Total price collected</p>
+                          <strong>{formatCurrency(bookingTotals.totalVolume)}</strong>
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="admin-table-wrapper" style={{ marginTop: 12 }}>
                       <h5 style={{ margin: "0 0 8px" }}>Provider Notification History</h5>
@@ -1697,6 +1815,11 @@ const ensureAuth = async () => {
                     >
                       Manage Users
                     </button>
+                    {userMgmtTab === "Customer Support" && (
+                      <button className="action-btn primary" onClick={addSupportMember}>
+                        Add Support Member
+                      </button>
+                    )}
                     <button
                       className="action-btn"
                       onClick={() => navigate("/admin/manager-approvals")}
