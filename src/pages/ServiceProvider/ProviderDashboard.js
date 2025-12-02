@@ -1,6 +1,7 @@
-﻿// src/components/ServiceProviderDashboard.js
-import React, { useEffect, useState } from "react";
+// src/components/ServiceProviderDashboard.js
+import React, { useEffect, useMemo, useState } from "react";
 import { Container, Row, Col, Card, Button, Modal, Form, Table, Badge, Alert, Nav } from "react-bootstrap";
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import {
   getServiceProviders,
   addServiceProvider,
@@ -11,307 +12,11 @@ import {
   updateService,
   deleteService
 } from "../../serviceProviderCRUD";
+import { COMMISSION_RATE, formatCurrency, getBookings, summarizeBookings } from "../../commission";
 import NavigationBar from "../../components/NavigationBar";
+import { auth, db, ensureFirebaseAuth } from "../../firebase";
 import "../Customer/CustomerDashboard.css";
 import "./ProviderDashboard.css";
-import "./AnalyticsPage.css"; // Import analytics CSS
-
-// Simple Pie Chart Component (from AnalyticsPage)
-const PieChart = ({ data, colors, title }) => {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-  let cumulativePercentage = 0;
-
-  return (
-    <div className="pie-chart-container">
-      <h6 className="chart-title">{title}</h6>
-      <div className="pie-chart">
-        <svg viewBox="0 0 100 100" className="pie-svg">
-          {data.map((item, index) => {
-            const percentage = (item.value / total) * 100;
-            const startAngle = cumulativePercentage * 3.6;
-            cumulativePercentage += percentage;
-            const endAngle = cumulativePercentage * 3.6;
-
-            const x1 = 50 + 40 * Math.cos((startAngle - 90) * (Math.PI / 180));
-            const y1 = 50 + 40 * Math.sin((startAngle - 90) * (Math.PI / 180));
-            const x2 = 50 + 40 * Math.cos((endAngle - 90) * (Math.PI / 180));
-            const y2 = 50 + 40 * Math.sin((endAngle - 90) * (Math.PI / 180));
-
-            const largeArcFlag = percentage > 50 ? 1 : 0;
-
-            return (
-              <path
-                key={index}
-                d={`M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2} Z`}
-                fill={colors[index % colors.length]}
-                className="pie-slice"
-              />
-            );
-          })}
-          <circle cx="50" cy="50" r="25" fill="white" />
-        </svg>
-      </div>
-      <div className="pie-legend">
-        {data.map((item, index) => (
-          <div key={index} className="legend-item">
-            <div className="legend-color" style={{ backgroundColor: colors[index % colors.length] }}></div>
-            <span className="legend-label">{item.label}</span>
-            <span className="legend-value">{item.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Simple Bar Chart Component (from AnalyticsPage)
-const BarChart = ({ data, colors, title }) => {
-  const maxValue = Math.max(...data.map(item => item.value));
-  
-  return (
-    <div className="bar-chart-container">
-      <h6 className="chart-title">{title}</h6>
-      <div className="bar-chart">
-        {data.map((item, index) => (
-          <div key={index} className="bar-item">
-            <div
-              className="bar"
-              style={{
-                height: `${(item.value / maxValue) * 100}%`,
-                backgroundColor: colors[index % colors.length],
-              }}
-            >
-              <span className="bar-value">{item.value}</span>
-            </div>
-            <span className="bar-label">{item.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Analytics Section Component
-const AnalyticsSection = ({ providers, services }) => {
-  const [analyticsData, setAnalyticsData] = useState({
-    providerStats: [],
-    serviceStats: [],
-    statusDistribution: [],
-    monthlyGrowth: []
-  });
-
-  // Calculate real data from props
-  useEffect(() => {
-    // Calculate provider categories distribution
-    const categoryCount = {};
-    providers.forEach(provider => {
-      categoryCount[provider.category] = (categoryCount[provider.category] || 0) + 1;
-    });
-    
-    const providerStats = Object.entries(categoryCount).map(([label, value]) => ({
-      label,
-      value
-    }));
-
-    // Calculate service categories distribution
-    const serviceCategoryCount = {};
-    services.forEach(service => {
-      serviceCategoryCount[service.category] = (serviceCategoryCount[service.category] || 0) + 1;
-    });
-    
-    const serviceStats = Object.entries(serviceCategoryCount).map(([label, value]) => ({
-      label,
-      value
-    }));
-
-    // Calculate status distribution
-    const statusCount = {};
-    providers.forEach(provider => {
-      statusCount[provider.status] = (statusCount[provider.status] || 0) + 1;
-    });
-    
-    const statusDistribution = Object.entries(statusCount).map(([label, value]) => ({
-      label,
-      value
-    }));
-
-    // Mock monthly growth (you can replace this with real data)
-    const monthlyGrowth = [
-      { label: "Jan", value: Math.floor(providers.length * 0.6) },
-      { label: "Feb", value: Math.floor(providers.length * 0.7) },
-      { label: "Mar", value: Math.floor(providers.length * 0.8) },
-      { label: "Apr", value: Math.floor(providers.length * 0.9) },
-      { label: "May", value: providers.length },
-      { label: "Jun", value: Math.floor(providers.length * 1.1) }
-    ];
-
-    setAnalyticsData({
-      providerStats,
-      serviceStats,
-      statusDistribution,
-      monthlyGrowth
-    });
-  }, [providers, services]);
-
-  const chartColors = {
-    primary: ['#4F46E5', '#6366F1', '#818CF8', '#A5B4FC', '#C7D2FE'],
-    success: ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0'],
-    warning: ['#F59E0B', '#FBBF24', '#FCD34D', '#FDE68A'],
-    info: ['#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE']
-  };
-
-  const activeProviders = providers.filter(p => p.status === "Active").length;
-  const pendingProviders = providers.filter(p => p.status === "Pending").length;
-  const availableServices = services.filter(s => s.available).length;
-
-  return (
-    <div className="analytics-section">
-      {/* Header */}
-      <div className="analytics-header mb-4">
-        <div>
-          <h3>Analytics Dashboard</h3>
-          <p className="text-muted">Comprehensive insights and performance metrics</p>
-        </div>
-        <div className="header-actions">
-          <Button variant="outline-primary" className="me-2">
-            <i className="bi bi-download"></i> Export Report
-          </Button>
-          <Button variant="primary">
-            <i className="bi bi-arrow-clockwise"></i> Refresh
-          </Button>
-        </div>
-      </div>
-
-      {/* Key Metrics */}
-      <Row className="g-4 mb-4">
-        <Col lg={3} md={6}>
-          <Card className="metric-card">
-            <Card.Body>
-              <div className="metric-icon bg-primary">
-                <i className="bi bi-people"></i>
-              </div>
-              <h3>{providers.length}</h3>
-              <p>Total Providers</p>
-              <div className="metric-trend up">
-                <i className="bi bi-arrow-up"></i> {providers.length > 0 ? Math.round(providers.length * 0.12) : 0}% increase
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col lg={3} md={6}>
-          <Card className="metric-card">
-            <Card.Body>
-              <div className="metric-icon bg-success">
-                <i className="bi bi-check-circle"></i>
-              </div>
-              <h3>{activeProviders}</h3>
-              <p>Active Providers</p>
-              <div className="metric-trend up">
-                <i className="bi bi-arrow-up"></i> 8% increase
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col lg={3} md={6}>
-          <Card className="metric-card">
-            <Card.Body>
-              <div className="metric-icon bg-warning">
-                <i className="bi bi-briefcase"></i>
-              </div>
-              <h3>{services.length}</h3>
-              <p>Total Services</p>
-              <div className="metric-trend up">
-                <i className="bi bi-arrow-up"></i> 15% increase
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col lg={3} md={6}>
-          <Card className="metric-card">
-            <Card.Body>
-              <div className="metric-icon bg-info">
-                <i className="bi bi-graph-up"></i>
-              </div>
-              <h3>{activeProviders > 0 ? Math.round((activeProviders / providers.length) * 100) : 0}%</h3>
-              <p>Active Rate</p>
-              <div className="metric-trend up">
-                <i className="bi bi-arrow-up"></i> 3% increase
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Charts Section */}
-      <Row className="g-4">
-        {/* Provider Status Distribution */}
-        <Col lg={6}>
-          <Card className="chart-card">
-            <Card.Header>
-              <h5><i className="bi bi-pie-chart-fill"></i> Provider Status Distribution</h5>
-            </Card.Header>
-            <Card.Body>
-              <PieChart 
-                data={analyticsData.statusDistribution} 
-                colors={chartColors.primary}
-                title="Provider Status"
-              />
-            </Card.Body>
-          </Card>
-        </Col>
-
-        {/* Service Categories */}
-        <Col lg={6}>
-          <Card className="chart-card">
-            <Card.Header>
-              <h5><i className="bi bi-pie-chart-fill"></i> Service Categories</h5>
-            </Card.Header>
-            <Card.Body>
-              <PieChart 
-                data={analyticsData.serviceStats.slice(0, 5)} 
-                colors={chartColors.success}
-                title="Top Service Categories"
-              />
-            </Card.Body>
-          </Card>
-        </Col>
-
-        {/* Provider Categories */}
-        <Col lg={6}>
-          <Card className="chart-card">
-            <Card.Header>
-              <h5><i className="bi bi-bar-chart-fill"></i> Provider Categories</h5>
-            </Card.Header>
-            <Card.Body>
-              <BarChart 
-                data={analyticsData.providerStats.slice(0, 6)} 
-                colors={chartColors.info}
-                title="Provider Categories"
-              />
-            </Card.Body>
-          </Card>
-        </Col>
-
-        {/* Monthly Growth */}
-        <Col lg={6}>
-          <Card className="chart-card">
-            <Card.Header>
-              <h5><i className="bi bi-bar-chart-fill"></i> Monthly Growth</h5>
-            </Card.Header>
-            <Card.Body>
-              <BarChart 
-                data={analyticsData.monthlyGrowth} 
-                colors={chartColors.warning}
-                title="Monthly Provider Growth"
-              />
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-    </div>
-  );
-};
-
 export default function ServiceProviderDashboard() {
   const [providers, setProviders] = useState([]);
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -343,6 +48,11 @@ export default function ServiceProviderDashboard() {
 
   const [message, setMessage] = useState({ type: "", text: "" });
   const [activeView, setActiveView] = useState("overview");
+  const [bookings, setBookings] = useState([]);
+  const [providerNotifications, setProviderNotifications] = useState([]);
+  const [currentEmail, setCurrentEmail] = useState("");
+  const [bookingView, setBookingView] = useState("all");
+  const [providerUnreadCount, setProviderUnreadCount] = useState(0);
 
   const fetchProviders = async () => {
     try {
@@ -355,17 +65,94 @@ export default function ServiceProviderDashboard() {
 
   const fetchServices = async () => {
     try {
+      if (db) {
+        await ensureFirebaseAuth();
+        const servicesQuery = query(collection(db, "Services"));
+        return onSnapshot(
+          servicesQuery,
+          (snapshot) => {
+            const docs = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+            setServices(docs);
+          },
+          () => setMessage({ type: "error", text: "Failed to fetch services" })
+        );
+      }
+
+      // Fallback to local storage if Firebase is unavailable
       const data = await getServices();
       setServices(data);
+      return undefined;
     } catch (error) {
       setMessage({ type: "error", text: "Failed to fetch services" });
+      return undefined;
     }
   };
 
   useEffect(() => {
     fetchProviders();
-    fetchServices();
+    let unsubscribeServices;
+    fetchServices().then((unsub) => {
+      unsubscribeServices = unsub;
+    });
+    const unsubAuth = auth?.onAuthStateChanged?.((user) => {
+      setCurrentEmail(user?.email || "");
+    });
+    return () => {
+      if (unsubscribeServices) unsubscribeServices();
+      if (unsubAuth) unsubAuth();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!db || !currentEmail) return undefined;
+    let mounted = true;
+    const notificationsQuery = query(
+      collection(db, "Notification"),
+      where("providerEmail", "==", currentEmail.toLowerCase()),
+      orderBy("sentAt", "desc")
+    );
+    const unsubscribe = onSnapshot(
+      notificationsQuery,
+      (snapshot) => {
+        if (!mounted) return;
+        const docs = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+        setProviderNotifications(docs);
+        setProviderUnreadCount(docs.length);
+      },
+      (error) => {
+        console.warn("[ProviderDashboard] Failed to load notifications", error);
+      }
+    );
+    return () => {
+      mounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, [currentEmail]);
+
+  useEffect(() => {
+    if (!db || !currentEmail) return undefined;
+    let mounted = true;
+    const bookingsQuery = query(
+      collection(db, "Order"),
+      where("providerEmail", "==", currentEmail.toLowerCase()),
+      orderBy("createdAt", "desc")
+    );
+    const unsubscribe = onSnapshot(
+      bookingsQuery,
+      (snapshot) => {
+        if (!mounted) return;
+        const docs = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+        setBookings(docs);
+      },
+      (error) => {
+        console.warn("[ProviderDashboard] Failed to load bookings", error);
+      }
+    );
+    return () => {
+      mounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, [currentEmail]);
 
   // ... (keep all your existing handler functions exactly the same)
   const handleProviderChange = (e) => {
@@ -477,12 +264,61 @@ export default function ServiceProviderDashboard() {
     }
 
     try {
-      if (editingServiceId) {
-        await updateService(editingServiceId, serviceFormData);
-        setMessage({ type: "success", text: "Service updated successfully!" });
+      if (db) {
+        await ensureFirebaseAuth();
+        const payload = {
+          serviceId: serviceFormData.serviceId,
+          serviceName: serviceFormData.serviceName,
+          service: serviceFormData.serviceName,
+          description: serviceFormData.description,
+          price: serviceFormData.price,
+          duration: serviceFormData.duration,
+          category: serviceFormData.category,
+          providerId: serviceFormData.providerId,
+          provider: serviceFormData.providerId,
+          available: serviceFormData.available,
+          status: "Pending",
+          visible: false,
+          submittedAt: new Date().toISOString(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: "service-provider",
+        };
+
+        if (editingServiceId) {
+          await updateDoc(doc(db, "Services", editingServiceId), {
+            ...payload,
+            updatedAt: serverTimestamp(),
+            status: "Pending",
+            visible: false,
+          });
+          setMessage({ type: "success", text: "Service updated and awaiting approval." });
+        } else {
+          const newServiceRef = await addDoc(collection(db, "Services"), payload);
+          setMessage({ type: "success", text: "Service submitted for admin approval." });
+          try {
+            await addDoc(collection(db, "Notification"), {
+              audience: "Administrators",
+              channel: "In-App",
+              subject: "Service pending approval",
+              message: `${serviceFormData.serviceName || "A service"} was submitted by provider ${serviceFormData.providerId ||
+                "unknown"}.`,
+              status: "Pending",
+              sentAt: serverTimestamp(),
+              serviceDocId: newServiceRef.id,
+            });
+          } catch (notifyErr) {
+            console.warn("[ProviderDashboard] Failed to log approval notification", notifyErr);
+          }
+        }
       } else {
-        await addService(serviceFormData);
-        setMessage({ type: "success", text: "Service added successfully!" });
+        if (editingServiceId) {
+          await updateService(editingServiceId, serviceFormData);
+          setMessage({ type: "success", text: "Service updated successfully!" });
+        } else {
+          await addService(serviceFormData);
+          setMessage({ type: "success", text: "Service added successfully!" });
+        }
       }
       setShowServiceModal(false);
       fetchServices();
@@ -494,7 +330,12 @@ export default function ServiceProviderDashboard() {
   const handleDeleteService = async (id) => {
     if (window.confirm("Are you sure you want to delete this service?")) {
       try {
-        await deleteService(id);
+        if (db) {
+          await ensureFirebaseAuth();
+          await deleteDoc(doc(db, "Services", id));
+        } else {
+          await deleteService(id);
+        }
         setMessage({ type: "success", text: "Service deleted successfully!" });
         fetchServices();
       } catch (error) {
@@ -508,32 +349,43 @@ export default function ServiceProviderDashboard() {
   const activeProviders = providers.filter(p => p.status === "Active").length;
   const pendingProviders = providers.filter(p => p.status === "Pending").length;
   const availableServices = services.filter(s => s.available).length;
+  const bookingTotals = useMemo(() => summarizeBookings(bookings), [bookings]);
+  const commissionRatePercent = Math.round((COMMISSION_RATE || 0) * 100);
+  const unreadProviderNotifications = providerUnreadCount;
+
+  const updateBookingStatus = async (id, status) => {
+    try {
+      if (db && id) {
+        await updateDoc(doc(db, "Order", id), { status });
+      }
+      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to update booking status" });
+    }
+  };
+
+  const deleteBookingById = async (id) => {
+    try {
+      if (db && id) {
+        await deleteDoc(doc(db, "Order", id));
+      }
+      setBookings((prev) => prev.filter((b) => b.id !== id));
+      setMessage({ type: "success", text: "Booking deleted." });
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to delete booking" });
+    }
+  };
 
   return (
     <div className="customer-page provider-dashboard-page">
       <div className="dashboard-page">
-        <NavigationBar />
+        <NavigationBar
+          activeSection="provider"
+          notificationCount={providerUnreadCount}
+          notifications={providerNotifications}
+          onNotificationsViewed={() => setProviderUnreadCount(0)}
+        />
         <div className="dashboard-wrapper">
-          {/* Top Header */}
-          <div className="dashboard-header">
-            <Container fluid>
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <h1 className="dashboard-title">Service Provider Dashboard</h1>
-                  <p className="dashboard-subtitle">Manage your service providers and offerings</p>
-                </div>
-                <div className="header-actions">
-                  <Button variant="outline-light" className="me-2">
-                    <i className="bi bi-bell"></i> Notifications
-                  </Button>
-                  <Button variant="outline-light">
-                    <i className="bi bi-person-circle"></i> Profile
-                  </Button>
-                </div>
-              </div>
-            </Container>
-          </div>
-
           <Container fluid className="dashboard-content">
         {message.text && (
           <Alert 
@@ -560,20 +412,20 @@ export default function ServiceProviderDashboard() {
           </Nav.Item>
           <Nav.Item>
             <Nav.Link 
-              active={activeView === "providers"} 
-              onClick={() => setActiveView("providers")}
-              className="nav-link-custom"
-            >
-              <i className="bi bi-people-fill"></i> Service Providers
-            </Nav.Link>
-          </Nav.Item>
-          <Nav.Item>
-            <Nav.Link 
               active={activeView === "services"} 
               onClick={() => setActiveView("services")}
               className="nav-link-custom"
             >
               <i className="bi bi-briefcase-fill"></i> Services
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link 
+              active={activeView === "bookings"} 
+              onClick={() => setActiveView("bookings")}
+              className="nav-link-custom"
+            >
+              <i className="bi bi-calendar-check-fill"></i> Bookings
             </Nav.Link>
           </Nav.Item>
           <Nav.Item>
@@ -649,148 +501,34 @@ export default function ServiceProviderDashboard() {
               </Col>
             </Row>
 
-            {/* Quick Actions */}
             <Row className="g-4 mb-4">
               <Col lg={6} md={12}>
-                <Card className="action-card">
+                <Card className="stat-card stat-card-commission">
                   <Card.Body>
-                    <div className="action-icon bg-primary">
-                      <i className="bi bi-plus-circle-fill"></i>
+                    <div className="stat-icon">
+                      <i className="bi bi-cash-coin"></i>
                     </div>
-                    <h4>Add New Service</h4>
-                    <p className="text-muted">Expand your offerings by adding new services to your catalog</p>
-                    <Button variant="primary" size="lg" onClick={handleAddService} className="action-button">
-                      Add Service <i className="bi bi-arrow-right"></i>
-                    </Button>
+                    <p className="stat-label">Admin commission ({commissionRatePercent}%)</p>
+                    <h3 className="stat-number">{formatCurrency(bookingTotals.adminTotal)}</h3>
+                    <p className="text-muted mb-0">Collected on recent bookings</p>
+                  </Card.Body>
+                </Card>
+              </Col>
+              <Col lg={6} md={12}>
+                <Card className="stat-card stat-card-payout">
+                  <Card.Body>
+                    <div className="stat-icon">
+                      <i className="bi bi-piggy-bank"></i>
+                    </div>
+                    <p className="stat-label">Provider payout</p>
+                    <h3 className="stat-number">{formatCurrency(bookingTotals.providerTotal)}</h3>
+                    <p className="text-muted mb-0">Total after commission</p>
                   </Card.Body>
                 </Card>
               </Col>
             </Row>
 
-            {/* Recent Activities */}
-            <Row>
-              <Col lg={8}>
-                <Card className="recent-card">
-                  <Card.Header>
-                    <h5><i className="bi bi-clock-history"></i> Recent Service Providers</h5>
-                  </Card.Header>
-                  <Card.Body>
-                    {providers.slice(0, 5).map((provider) => (
-                      <div key={provider.id} className="recent-item">
-                        <div className="recent-item-icon">
-                          <i className="bi bi-building"></i>
-                        </div>
-                        <div className="recent-item-content">
-                          <h6>{provider.businessName}</h6>
-                          <p className="text-muted mb-0">{provider.ownerName} ΓÇó {provider.category}</p>
-                        </div>
-                        <Badge bg={provider.status === "Active" ? "success" : "warning"}>
-                          {provider.status}
-                        </Badge>
-                      </div>
-                    ))}
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col lg={4}>
-                <Card className="category-card">
-                  <Card.Header>
-                    <h5><i className="bi bi-pie-chart"></i> Categories</h5>
-                  </Card.Header>
-                  <Card.Body>
-                    {categories.slice(0, 6).map((cat) => (
-                      <div key={cat} className="category-item">
-                        <span>{cat}</span>
-                        <Badge bg="secondary">{providers.filter(p => p.category === cat).length}</Badge>
-                      </div>
-                    ))}
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
-
-            {/* Analytics Snapshot inside overview */}
-            <div className="mt-5">
-              <AnalyticsSection 
-                providers={providers}
-                services={services}
-              />
-            </div>
-          </>
-        )}
-
-        {/* Service Providers Section */}
-        {activeView === "providers" && (
-          <>
-            <div className="section-header">
-              <div>
-                <h3>Service Providers</h3>
-                <p className="text-muted">Manage all registered service providers</p>
-              </div>
-              <Button variant="success" size="lg" onClick={handleAddProvider}>
-                <i className="bi bi-person-plus"></i> Register Provider
-              </Button>
-            </div>
-
-            <Card className="table-card wider-table">
-              <Card.Body className="table-card-body p-0">
-                <div className="table-container-wide">
-                  <Table responsive hover className="modern-table wider-table">
-                    <thead>
-                      <tr>
-                        <th width="5%">#</th>
-                        <th width="12%">Provider ID</th>
-                        <th width="20%">Business Name</th>
-                        <th width="15%">Owner</th>
-                        <th width="18%">Contact</th>
-                        <th width="15%">Category</th>
-                        <th width="10%">Status</th>
-                        <th width="10%">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {providers.length === 0 ? (
-                        <tr>
-                          <td colSpan="8" className="text-center py-5">
-                            <i className="bi bi-inbox" style={{fontSize: "3rem", opacity: 0.3}}></i>
-                            <p className="text-muted mt-3">No service providers registered yet</p>
-                          </td>
-                        </tr>
-                      ) : (
-                        providers.map((provider, index) => (
-                          <tr key={provider.id}>
-                            <td>{index + 1}</td>
-                            <td><Badge bg="secondary" className="provider-id-badge">{provider.providerId}</Badge></td>
-                            <td><strong className="business-name">{provider.businessName}</strong></td>
-                            <td>{provider.ownerName}</td>
-                            <td>
-                              <div className="contact-email">{provider.email}</div>
-                              <small className="text-muted contact-phone">{provider.phone}</small>
-                            </td>
-                            <td><Badge bg="info" className="category-badge">{provider.category}</Badge></td>
-                            <td>
-                              <Badge bg={provider.status === "Active" ? "success" : provider.status === "Pending" ? "warning" : "danger"} className="status-badge">
-                                {provider.status}
-                              </Badge>
-                            </td>
-                            <td>
-                              <div className="action-buttons">
-                                <Button size="sm" variant="warning" className="me-2 edit-btn" onClick={() => handleEditProvider(provider)}>
-                                  <i className="bi bi-pencil"></i>
-                                </Button>
-                                <Button size="sm" variant="danger" className="delete-btn" onClick={() => handleDeleteProvider(provider.id)}>
-                                  <i className="bi bi-trash"></i>
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </Table>
-                </div>
-              </Card.Body>
-            </Card>
+            
           </>
         )}
 
@@ -861,13 +599,122 @@ export default function ServiceProviderDashboard() {
           </>
         )}
 
-        {/* Analytics Section - Now using the integrated AnalyticsSection component */}
-        {activeView === "analytics" && (
-          <AnalyticsSection 
-            providers={providers}
-            services={services}
-          />
+        {/* Bookings Section */}
+        {activeView === "bookings" && (
+          <>
+            <div className="section-header">
+              <div>
+                <h3>Bookings</h3>
+                <p className="text-muted">New customer requests and confirmed bookings</p>
+              </div>
+              <div className="d-flex gap-2">
+                <Button
+                  variant={bookingView === "all" ? "primary" : "outline-primary"}
+                  onClick={() => setBookingView("all")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={bookingView === "new" ? "primary" : "outline-primary"}
+                  onClick={() => setBookingView("new")}
+                >
+                  New
+                </Button>
+              </div>
+            </div>
+
+            <Row className="g-4">
+              <Col xs={12}>
+                <Card className="table-card wider-table">
+                  <Card.Body className="p-0">
+                    {bookings.length === 0 ? (
+                      <div className="text-center py-5">
+                        <i className="bi bi-inbox" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
+                        <p className="text-muted mt-3">No bookings yet.</p>
+                      </div>
+                    ) : (
+                      <Table responsive hover className="modern-table">
+                        <thead>
+                          <tr>
+                            <th>Service</th>
+                            <th>Customer</th>
+                            <th>City</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bookings
+                            .filter((b) => {
+                              if (bookingView === "new") {
+                                const status = (b.status || "").toLowerCase();
+                                return status === "pending" || status === "new";
+                              }
+                              return true;
+                            })
+                            .map((booking) => (
+                              <tr key={booking.id}>
+                                <td>{booking.service || "Service"}</td>
+                                <td>{booking.customerName || booking.email || booking.customerEmail || "Customer"}</td>
+                                <td>{booking.city || "-"}</td>
+                                <td>{formatCurrency(booking.totalPrice || booking.basePrice || 0)}</td>
+                                <td>
+                                  <Badge
+                                    bg={
+                                      (booking.status || "").toLowerCase() === "completed"
+                                        ? "success"
+                                        : (booking.status || "").toLowerCase() === "in progress"
+                                        ? "warning"
+                                        : "secondary"
+                                    }
+                                  >
+                                    {booking.status || "Pending"}
+                                  </Badge>
+                                </td>
+                                <td className="table-actions">
+                                  <Button
+                                    size="sm"
+                                    variant="success"
+                                    onClick={() => updateBookingStatus(booking.id, "Accepted")}
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="warning"
+                                    onClick={() => updateBookingStatus(booking.id, "In Progress")}
+                                  >
+                                    In Progress
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="primary"
+                                    onClick={() => updateBookingStatus(booking.id, "Completed")}
+                                  >
+                                    Complete
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="danger"
+                                    onClick={() => deleteBookingById(booking.id)}
+                                  >
+                                    Delete
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </Table>
+                    )}
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          </>
         )}
+
+        {/* Analytics Section intentionally removed from provider dashboard */}
 
         {/* Keep your existing modals exactly as they are */}
         <Modal 
@@ -1094,4 +941,6 @@ export default function ServiceProviderDashboard() {
   </div>
   );
 }
+
+
 
