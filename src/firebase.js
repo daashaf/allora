@@ -4,6 +4,7 @@ import {
   onAuthStateChanged,
   signInAnonymously,
   signInWithEmailAndPassword,
+  signOut,
 } from "firebase/auth";
 import { getFirestore, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 
@@ -77,6 +78,7 @@ export const ensureUserRole = async (uid, email) => {
 
 const serviceEmail = process.env.REACT_APP_FIREBASE_SERVICE_EMAIL;
 const servicePassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD;
+const enableServiceLogin = (process.env.REACT_APP_ENABLE_SERVICE_LOGIN || "").toLowerCase() === "true";
 
 const fallbackUser = { uid: "unauthenticated-client", isAnonymous: true, fromFallback: true };
 
@@ -88,7 +90,7 @@ export const authReady = appInstance
   : Promise.resolve(fallbackUser);
 
 const tryServiceCredentials = async () => {
-  if (!auth || !serviceEmail || !servicePassword) return false;
+  if (!enableServiceLogin || !auth || !serviceEmail || !servicePassword) return false;
   try {
     await signInWithEmailAndPassword(auth, serviceEmail, servicePassword);
     // eslint-disable-next-line no-console

@@ -1,18 +1,44 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAuth, signOut } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import {
-    getFirestore,
     collection,
     getDocs,
     addDoc,
     doc,
     getDoc,
+    onSnapshot,
+    query,
+    where,
+    orderBy,
     serverTimestamp,
 } from "firebase/firestore";
-import { app } from "../../firebase";
 import NavigationBar from "../../components/NavigationBar";
+import { auth, db } from "../../firebase";
 import "./SupportDashboard.css";
+
+const getTicketStoreKey = (ownerKey = "guest") => `allora_support_tickets_${ownerKey}`;
+
+const readTicketsLocal = (ownerKey = "guest") => {
+    const key = getTicketStoreKey(ownerKey);
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+};
+
+const writeTicketsLocal = (list, ownerKey = "guest") => {
+    const key = getTicketStoreKey(ownerKey);
+    try {
+        localStorage.setItem(key, JSON.stringify(list));
+    } catch {
+        // ignore
+    }
+};
 
 const FALLBACK_SUPPORT_TOPICS = [
     {
@@ -38,8 +64,6 @@ const FALLBACK_SUPPORT_TOPICS = [
 function SupportDashboard() {
 
     const navigate = useNavigate();
-    const auth = getAuth(app);
-    const db = getFirestore(app);
 
     // States
     const [successMessage, setSuccessMessage] = useState("");
@@ -48,10 +72,9 @@ function SupportDashboard() {
     const [showNotifications, setShowNotifications] = useState(false);
     const [showTickets, setShowTickets] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [activeTopic, setActiveTopic] = useState(0);
     const [feedbackTicket, setFeedbackTicket] = useState(null);
     const [headerUserEmail, setHeaderUserEmail] = useState("");
-
+    const [openTopicId, setOpenTopicId] = useState(null);
 
 
 
@@ -100,22 +123,51 @@ function SupportDashboard() {
         };
 
         fetchUserData();
-    }, [auth, db]);
+    }, []);
 
     //  FETCH TICKETS (REAL-TIME) 
     useEffect(() => {
-        const fetchTickets = async () => {
-            if (!db) return;
-            try {
-                const snap = await getDocs(collection(db, "FAQ"));
-                const data = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const ownerKey = auth?.currentUser?.email?.toLowerCase() || "guest";
+        const fallbackTickets = readTicketsLocal(ownerKey);
+        if (!db) {
+            setTickets(fallbackTickets);
+            return undefined;
+        }
+
+        if (ownerKey === "guest") {
+            setTickets(fallbackTickets);
+            return undefined;
+        }
+
+        const ticketsQuery = query(
+            collection(db, "tickets"),
+            where("userEmail", "==", ownerKey),
+            orderBy("createdAt", "desc")
+        );
+
+        const unsubscribe = onSnapshot(
+            ticketsQuery,
+            (snap) => {
+                const data = snap.docs.map((docSnap) => {
+                    const item = docSnap.data();
+                    const createdAt = item.createdAt?.toDate ? item.createdAt.toDate() : item.createdAt;
+                    return {
+                        id: docSnap.id,
+                        ...item,
+                        createdAt,
+                    };
+                });
                 setTickets(data);
-            } catch (error) {
+                writeTicketsLocal(data, ownerKey);
+            },
+            (error) => {
                 console.error("[SupportDashboard] Error fetching tickets:", error);
+                setTickets(fallbackTickets);
             }
-        };
-        fetchTickets();
-    }, [db]);
+        );
+
+        return unsubscribe;
+    }, []);
 
     //  FETCH NOTIFICATIONS (one-time) 
     useEffect(() => {
@@ -130,7 +182,7 @@ function SupportDashboard() {
             }
         };
         fetchNotifications();
-    }, [db]);
+    }, []);
 
     //  FETCH FAQ TOPICS (one-time) 
     useEffect(() => {
@@ -157,15 +209,7 @@ function SupportDashboard() {
             }
         };
         fetchTopics();
-    }, [db]);
-
-    // Ensure a topic is always selected when data loads/changes
-    useEffect(() => {
-        if (!supportTopics.length) return;
-        if (activeTopic == null || activeTopic >= supportTopics.length) {
-            setActiveTopic(0);
-        }
-    }, [supportTopics, activeTopic]);
+    }, []);
 
     //  LOGOUT 
     const handleLogout = () => {
@@ -184,25 +228,52 @@ function SupportDashboard() {
             alert("Please fill in both subject and description.");
             return;
         }
+
+        if (!db) {
+            alert("Support tickets are unavailable because Firebase is not configured.");
+            return;
+        }
+
+        console.log("Creating ticket with:", { auth: !!auth, db: !!db, currentUser: auth?.currentUser });
+
+        const currentUser = auth?.currentUser;
+        const ownerKey = currentUser?.email?.toLowerCase() || "guest";
+        const ticketData = {
+            subject: newTicket.subject.trim(),
+            description: newTicket.description.trim(),
+            status: newTicket.status,
+            createdAt: serverTimestamp(),
+            userId: currentUser?.uid || "guest",
+            userName: userInfo.name || currentUser?.displayName || "Guest User",
+            userEmail: (userInfo.email || currentUser?.email || "guest@example.com").toLowerCase(),
+            userPhone: userInfo.phone || "Not provided",
+        };
+
+        console.log("Ticket data:", ticketData);
+
         try {
-            const currentUser = auth.currentUser;
-            await addDoc(collection(db, "FAQ"), {
-                subject: newTicket.subject,
-                description: newTicket.description,
-                status: newTicket.status,
-                createdAt: serverTimestamp(),
-                userId: currentUser?.uid || null,
-                userName: userInfo.name || "Unknown User",
-                userEmail: userInfo.email || currentUser?.email || "No Email",
-                userPhone: userInfo.phone || "Not provided",
-            });
+            await addDoc(collection(db, "tickets"), ticketData);
             setNewTicket({ subject: "", description: "", status: "Open" });
             setShowCreateTicket(false);
             setSuccessMessage("Ticket created successfully!");
             setTimeout(() => setSuccessMessage(""), 3000);
         } catch (error) {
-            console.error("Error creating ticket:", error);
-            alert("Failed to create ticket. Please try again.");
+            console.error("Failed to create ticket:", error);
+            // Fallback to local storage so the user still sees their ticket.
+            const localTicket = {
+                ...ticketData,
+                id: `local-${Date.now()}`,
+                createdAt: new Date(),
+            };
+            setTickets((prev) => {
+                const updated = [localTicket, ...prev];
+                writeTicketsLocal(updated, ownerKey);
+                return updated;
+            });
+            setNewTicket({ subject: "", description: "", status: "Open" });
+            setShowCreateTicket(false);
+            setSuccessMessage("Ticket saved locally. It will sync when Firestore is available.");
+            setTimeout(() => setSuccessMessage(""), 4000);
         }
     };
 
@@ -222,6 +293,15 @@ function SupportDashboard() {
             const query = searchQuery?.toLowerCase?.() || "";
             return title.includes(query) || topic.faqs.length > 0;
         });
+
+    useEffect(() => {
+        // Reset open state if topics change
+        setOpenTopicId(null);
+    }, [supportTopics]);
+
+    const toggleTopic = (key) => {
+        setOpenTopicId((prev) => (prev === key ? null : key));
+    };
 
     //  FORMAT DATE FUNCTION 
     const formatDate = (timestamp) => {
@@ -335,51 +415,57 @@ function SupportDashboard() {
                         </div>
                     ) : (
                         <p className="no-results">
-                            No results found -{" "}
-                            create a support ticket.
+                            No results found - create a support ticket.
                         </p>
 
                     )
                 ) : supportTopics.length ? (
-                    <div className="support-accordion">
-                        {supportTopics.map((topic, index) => {
-                            const isOpen = activeTopic === index;
-                            return (
-                                <div key={index} className={`support-accordion-item ${isOpen ? "open" : ""}`}>
-                                    <button
-                                        type="button"
-                                        className="support-accordion-trigger"
-                                        onClick={() => setActiveTopic(index)}
-                                    >
-                                        <span>
-                                            <strong>{topic.title}</strong>
-                                            <small>{topic.desc}</small>
-                                        </span>
-                                        <span className="chevron">{isOpen ? "▾" : "▸"}</span>
-                                    </button>
-                                    {isOpen && (
-                                        <div className="support-accordion-faqs">
-                                            {(topic.faqs || []).map((faq, i) => (
-                                                <div key={i} className="faq-row">
-                                                    <p className="faq-q">{faq.Q || faq.q}</p>
-                                                    <p className="faq-a">{faq.A || faq.a}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                    <div className="support-grid support-card-grid">
+                        {supportTopics.map((topic, index) => (
+                            <div
+                                key={topic.id || index}
+                                className="support-card faq-card"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => toggleTopic(topic.id || index)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        toggleTopic(topic.id || index);
+                                    }
+                                }}
+                                aria-expanded={openTopicId === (topic.id || index)}
+                            >
+                                <div className="faq-card-header">
+                                    <div>
+                                        <h3>{topic.title}</h3>
+                                        <p className="support-card-desc">{topic.desc}</p>
+                                    </div>
                                 </div>
-                            );
-                        })}
+                                {openTopicId === (topic.id || index) && (
+                                    <div className="support-card-faqs">
+                                        {(topic.faqs || []).map((faq, i) => (
+                                            <div key={i} className="faq-row card-row">
+                                                <p className="faq-q">{faq.Q || faq.q}</p>
+                                                <p className="faq-a">{faq.A || faq.a}</p>
+                                            </div>
+                                        ))}
+                                        {(!topic.faqs || topic.faqs.length === 0) && (
+                                            <p className="support-card-empty">No FAQs yet for this topic.</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <div className="support-empty-state">
                         <h3>No help topics yet</h3>
                         <p>Start by creating a ticket so our team can add resources for your request.</p>
-                            <span className="create-ticket-placeholder" />
+                        <span className="create-ticket-placeholder" />
                     </div>
                 )}
             </main>
-
             {/*  TICKETS PANEL  */}
             <div className={`tickets-panel ${showTickets ? "open" : ""}`}>
                 <div className="tickets-header">
@@ -412,20 +498,18 @@ function SupportDashboard() {
                                     <th>Status</th>
                                     <th>Created At</th>
                                     <th>Feedback</th>
-
                                 </tr>
                             </thead>
                             <tbody>
                                 {tickets.map((t) => (
-                                <tr key={t.id}>
-                                    <td>{t.userName || "Not Provided"}</td>
-                                    <td>{t.userEmail || "Not Provided"}</td>
-                                    <td>{t.userPhone || "Not Provided"}</td>
-                                    <td>{t.subject}</td>
-                                    <td>{t.status || "FAQ"}</td>
-                                    <td>{formatDate(t.createdAt)}</td>
-
-                                        <td>   {/*  NEW */}
+                                    <tr key={t.id}>
+                                        <td>{t.userName || "Not Provided"}</td>
+                                        <td>{t.userEmail || "Not Provided"}</td>
+                                        <td>{t.userPhone || "Not Provided"}</td>
+                                        <td>{t.subject}</td>
+                                        <td>{t.status || "FAQ"}</td>
+                                        <td>{formatDate(t.createdAt)}</td>
+                                        <td>
                                             {t.status === "Resolved" ? (
                                                 <button
                                                     className="feedback-btn"
@@ -437,7 +521,6 @@ function SupportDashboard() {
                                                 "-"
                                             )}
                                         </td>
-
                                     </tr>
                                 ))}
                             </tbody>
@@ -523,7 +606,7 @@ function SupportDashboard() {
                                             feedback: feedbackTicket.feedback || "",
                                             userEmail: feedbackTicket.userEmail,
                                             userName: feedbackTicket.userName,
-                                            createdAt: serverTimestamp(),
+                                            createdAt: new Date(),
                                         });
                                         setSuccessMessage("Thank you! Your feedback has been submitted successfully.");
                                         setFeedbackTicket(null);
@@ -584,17 +667,3 @@ function SupportDashboard() {
 }
 
 export default SupportDashboard;
-
-
-
-
-
-
-
-
-
-
-
-
-
-

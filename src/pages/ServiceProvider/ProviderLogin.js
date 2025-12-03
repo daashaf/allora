@@ -40,12 +40,17 @@ export default function ProviderLogin() {
     try {
       setSubmitting(true);
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      console.log("[ProviderLogin] Login successful for user:", cred.user.uid);
+
       const snap = await getDoc(doc(db, "users", cred.user.uid));
-      const role = snap.exists() ? snap.data()?.role : null;
+      const data = snap.exists() ? snap.data() : {};
+      const role = data.role || data.Role || data.userType || null;
+      console.log("[ProviderLogin] User data:", data, "role:", role);
+
       if (role === "Service Provider") {
         navigate("/provider/dashboard", { replace: true });
       } else {
-        setError("This account is not authorized for provider access.");
+        setError(`This account is not authorized for provider access. Role found: ${role}`);
         await signOut(auth);
       }
     } catch (signInError) {

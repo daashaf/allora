@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import { addServiceProvider } from "../../serviceProviderCRUD";
@@ -35,8 +35,9 @@ export default function ProviderRegistration() {
 
     try {
       setSubmitting(true);
+      const { password, ...safeFormData } = formData;
       await addServiceProvider({
-        ...formData,
+        ...safeFormData,
         status: "Pending",
         providerId: `SP-${Date.now()}`,
       });
@@ -64,7 +65,7 @@ export default function ProviderRegistration() {
       });
     } catch (error) {
       console.error("Failed to register provider", error);
-      setMessage("Unable to submit registration. Please try again.");
+      setMessage("Unable to submit registration to the server. Please try again once online.");
     } finally {
       setSubmitting(false);
     }

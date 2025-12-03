@@ -158,15 +158,20 @@ export default function GetStarted() {
             commissionRate: pricing.commissionRate,
           });
 
-          await addDoc(collection(db, "Order"), {
+          const orderDoc = await addDoc(collection(db, "Order"), {
             email: formData.email,
+            customerName: formData.name,
+            customerEmail: formData.email,
             phone: formData.phone || "",
             city: formData.city || "",
             service: formData.service,
             description: formData.details,
             providerEmail: (formData.providerEmail || "").toLowerCase(),
+            providerId: formData.providerId || prefillProviderId || "",
+            providerName: formData.providerName || prefillProviderName || "",
             priceToPay: pricing.totalPrice,
             fullPrice: pricing.totalPrice,
+            totalPrice: pricing.totalPrice,
             basePrice: pricing.basePrice,
             commissionAmount: pricing.commissionAmount,
             commissionRate: pricing.commissionRate,
@@ -177,10 +182,12 @@ export default function GetStarted() {
           if (formData.providerEmail) {
             await addDoc(collection(db, "Notification"), {
               audience: "Service Providers",
+              channel: "In-App",
               providerEmail: formData.providerEmail.toLowerCase(),
+              providerId: formData.providerId || "",
               subject: "New booking request",
-              message: `${formData.name} requested ${formData.service}.`,
-              status: "New",
+              message: `${formData.name} has requested ${formData.service}. Check your dashboard to accept or decline this booking.`,
+              status: "Sent",
               sentAt: serverTimestamp(),
             });
           }
@@ -201,21 +208,24 @@ export default function GetStarted() {
         console.warn("[GetStarted] Request email failed (ignored)", notifyErr);
       }
 
-      await addBooking({
-        service: formData.service,
-        providerEmail: formData.providerEmail || prefillProviderEmail,
-        providerId: formData.providerId || prefillProviderId,
-        providerName: formData.providerName || prefillProviderName,
-        customerName: formData.name,
-        customerEmail: formData.email,
-        city: formData.city,
-        basePrice: pricing.basePrice,
-        totalPrice: pricing.totalPrice,
-        commissionAmount: pricing.commissionAmount,
-        commissionRate: pricing.commissionRate,
-        status: "Booked",
-        source: "GetStarted",
-      });
+      // Only use addBooking as fallback if Firestore failed
+      if (!savedToFirestore) {
+        await addBooking({
+          service: formData.service,
+          providerEmail: formData.providerEmail || prefillProviderEmail,
+          providerId: formData.providerId || prefillProviderId,
+          providerName: formData.providerName || prefillProviderName,
+          customerName: formData.name,
+          customerEmail: formData.email,
+          city: formData.city,
+          basePrice: pricing.basePrice,
+          totalPrice: pricing.totalPrice,
+          commissionAmount: pricing.commissionAmount,
+          commissionRate: pricing.commissionRate,
+          status: "Booked",
+          source: "GetStarted",
+        });
+      }
 
       if (!savedToFirestore && !db) {
         console.warn("[GetStarted] No Firestore available; booking stored locally only.");
@@ -299,14 +309,24 @@ export default function GetStarted() {
               </div>
               <div>
                 <label htmlFor="service">Service</label>
-                <select id="service" name="service" value={formData.service} onChange={handleChange} required>
-                  <option value="">Select a service</option>
+                <input
+                  id="service"
+                  name="service"
+                  list="service-options"
+                  type="text"
+                  value={formData.service}
+                  onChange={handleChange}
+                  required
+                  placeholder="Select or type a service"
+                />
+                <datalist id="service-options">
                   {serviceOptions.map((serviceName) => (
-                    <option key={serviceName} value={serviceName}>
-                      {serviceName}
-                    </option>
+                    <option key={serviceName} value={serviceName} />
                   ))}
-                </select>
+                </datalist>
+                {!serviceOptions.length && (
+                  <small className="text-muted">Start typing the service you need.</small>
+                )}
               </div>
             </div>
 
@@ -387,3 +407,4 @@ export default function GetStarted() {
     </div>
   );
 }
+

@@ -1,3 +1,6 @@
+import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp } from "firebase/firestore";
+import { db, ensureFirebaseAuth } from "./firebase";
+
 const BOOKINGS_KEY = "allora_bookings";
 const FALLBACK_STORE = [];
 export const COMMISSION_RATE = 0.1;
@@ -61,12 +64,65 @@ const writeStore = (list) => {
   }
 };
 
-export const getBookings = async () => readStore();
+const bookingCollections = ["Order", "Orders", "Bookings"];
+
+const resolveBookingCollection = async () => {
+  if (!db) return null;
+  for (const name of bookingCollections) {
+    try {
+      const ref = collection(db, name);
+      const snap = await getDocs(query(ref, limit(1)));
+      return { ref, name, hasDocs: !snap.empty };
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn(`[Bookings] Cannot access collection ${name}, trying next`, error);
+    }
+  }
+  return { ref: collection(db, bookingCollections[0]), name: bookingCollections[0], hasDocs: false };
+};
+
+const normalizeBookingDoc = (docSnap) => {
+  const data = docSnap.data() || {};
+  const createdAtRaw = data.createdAt;
+  const createdMillis =
+    typeof createdAtRaw?.toMillis === "function"
+      ? createdAtRaw.toMillis()
+      : Date.parse(createdAtRaw || "") || Date.now();
+  return {
+    id: docSnap.id,
+    ...data,
+    createdAt: new Date(createdMillis).toISOString(),
+    createdAtMs: createdMillis,
+  };
+};
+
+export const getBookings = async () => {
+  if (db) {
+    try {
+      await ensureFirebaseAuth();
+      const resolved = await resolveBookingCollection();
+      if (resolved?.ref) {
+        let snap;
+        try {
+          snap = await getDocs(query(resolved.ref, orderBy("createdAt", "desc")));
+        } catch (orderErr) {
+          snap = await getDocs(resolved.ref);
+          // eslint-disable-next-line no-console
+          console.warn("[Bookings] Could not order by createdAt, returning unordered results", orderErr);
+        }
+        return snap.docs.map(normalizeBookingDoc);
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("[Bookings] Falling back to local storage", error);
+    }
+  }
+  return readStore();
+};
 
 export const addBooking = async (booking) => {
-  const list = readStore();
   const amounts = calculateCommission(
-    booking?.basePrice ?? booking?.price ?? 0,
+    booking?.basePrice ?? booking?.price ?? booking?.totalPrice ?? 0,
     booking?.commissionRate ?? COMMISSION_RATE
   );
 
@@ -78,6 +134,26 @@ export const addBooking = async (booking) => {
     ...amounts,
   };
 
+  if (db) {
+    try {
+      await ensureFirebaseAuth();
+      const resolved = await resolveBookingCollection();
+      if (resolved?.ref) {
+        const payload = {
+          ...record,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        const docRef = await addDoc(resolved.ref, payload);
+        return { ...record, id: docRef.id };
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn("[Bookings] Failed to write to Firestore, using local storage", error);
+    }
+  }
+
+  const list = readStore();
   list.unshift(record);
   writeStore(list);
   return record;

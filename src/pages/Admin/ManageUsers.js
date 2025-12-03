@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./AdminDashboard.css";
 import {
@@ -37,6 +37,19 @@ export default function ManageUsers() {
     status: "Active",
   });
   const [supportSubmitting, setSupportSubmitting] = useState(false);
+  const deriveDisplayName = (data = {}) => {
+    const first = data.firstName || data.first_name;
+    const last = data.lastName || data.last_name;
+    const combined = [first, last].filter(Boolean).join(" ").trim();
+    return (
+      combined ||
+      data.name ||
+      data.Name ||
+      data.displayName ||
+      data.fullName ||
+      "Unnamed"
+    );
+  };
   const normalizeRole = (value) =>
     typeof value === "string" ? value.trim().toLowerCase() : "";
   const normalizeStatus = (value) =>
@@ -61,7 +74,7 @@ export default function ManageUsers() {
             );
             return {
               id: docSnap.id,
-              name: data.name || data.Name || data.displayName || data.fullName || "Unnamed",
+              name: deriveDisplayName(data),
               email: data.email || data.Email || data.emailAddress || "",
               role: data.role || data.Role || "Customer",
               status: data.status || data.Status || "Active",

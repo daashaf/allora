@@ -1,10 +1,11 @@
 /* src/components/ServiceProviderDashboard.css - Allora Brand Theme */
 
 :root {
-  --allora-primary: #4F46E5;
-  --allora-primary-light: #6366F1;
-  --allora-primary-dark: #4338CA;
-  --allora-secondary: #FF6B6B;
+  --allora-primary: #3560FF;
+  --allora-primary-light: #4F7AFF;
+  --allora-primary-dark: #1F4FFF;
+  --allora-secondary: #0E2C63;
+  --allora-navy: #0E2C63;
   --allora-success: #10B981;
   --allora-warning: #F59E0B;
   --allora-info: #3B82F6;
@@ -120,10 +121,10 @@
 
 /* Stat Cards */
 .stat-card {
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f8ff 100%);
   border: 1px solid #e6ecf7;
   border-radius: 14px;
-  padding: 1.25rem;
+  padding: 1rem;
   position: relative;
   overflow: hidden;
   transition: all 0.2s ease;
@@ -136,30 +137,33 @@
   border-color: #d7e3ff;
 }
 
-.stat-card-blue {
+.stat-card-blue,
+.stat-card-green,
+.stat-card-orange,
+.stat-card-purple {
   border-top: 3px solid var(--allora-primary);
 }
 
 .stat-card-green {
-  border-top: 3px solid var(--allora-success);
+  border-top-color: var(--allora-primary-light);
 }
 
 .stat-card-orange {
-  border-top: 3px solid var(--allora-warning);
+  border-top-color: var(--allora-primary-dark);
 }
 
 .stat-card-purple {
-  border-top: 3px solid var(--allora-info);
+  border-top-color: var(--allora-navy);
 }
 
 .stat-card-commission {
   border-top: 3px solid var(--allora-primary);
-  background: #f8fafc;
+  background: linear-gradient(180deg, #f6f8ff 0%, #eef3ff 100%);
 }
 
 .stat-card-payout {
-  border-top: 3px solid var(--allora-success);
-  background: #f6fffb;
+  border-top: 3px solid var(--allora-primary-dark);
+  background: linear-gradient(180deg, #f7f9ff 0%, #eaf1ff 100%);
 }
 
 .stat-icon {
@@ -167,20 +171,20 @@
   right: 20px;
   top: 20px;
   font-size: 2.6rem;
-  opacity: 0.1;
+  opacity: 0.14;
   color: var(--allora-primary);
 }
 
 .stat-card-green .stat-icon {
-  color: var(--allora-success);
+  color: var(--allora-primary-light);
 }
 
 .stat-card-orange .stat-icon {
-  color: var(--allora-warning);
+  color: var(--allora-primary-dark);
 }
 
 .stat-card-purple .stat-icon {
-  color: var(--allora-info);
+  color: var(--allora-navy);
 }
 
 .stat-card-commission .stat-icon {
@@ -188,18 +192,18 @@
 }
 
 .stat-card-payout .stat-icon {
-  color: var(--allora-success);
+  color: var(--allora-primary-dark);
 }
 
 .stat-number {
-  font-size: 2.5rem;
+  font-size: 2.1rem;
   font-weight: 700;
   margin: 0;
   color: #0f172a;
 }
 
 .stat-label {
-  font-size: 1rem;
+  font-size: 0.95rem;
   color: #334155;
   margin: 0.5rem 0;
 }
@@ -213,6 +217,25 @@
   font-size: 0.85rem;
   font-weight: 600;
   border-radius: 8px;
+}
+
+.stat-card .stat-badge .badge {
+  background: linear-gradient(135deg, var(--allora-primary), var(--allora-primary-dark)) !important;
+  color: #fff !important;
+  border: none;
+  box-shadow: 0 8px 22px rgba(53, 96, 255, 0.2);
+}
+
+.stat-card-green .stat-badge .badge {
+  background: linear-gradient(135deg, var(--allora-primary-light), var(--allora-primary)) !important;
+}
+
+.stat-card-orange .stat-badge .badge {
+  background: linear-gradient(135deg, var(--allora-primary-dark), var(--allora-navy)) !important;
+}
+
+.stat-card-purple .stat-badge .badge {
+  background: linear-gradient(135deg, var(--allora-navy), #0a1f4c) !important;
 }
 
 /* Action Cards */
@@ -570,8 +593,9 @@
 
 /* Service Cards */
 .service-card {
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f8ff 100%);
   border: 1px solid #e6ecf7;
+  border-top: 3px solid var(--allora-primary);
   border-radius: 14px;
   box-shadow: 0 10px 30px rgba(17, 42, 94, 0.08);
   transition: all 0.2s ease;
@@ -601,7 +625,7 @@
 }
 
 .service-details {
-  background: var(--allora-light);
+  background: #eef3ff;
   padding: 1rem;
   border-radius: 12px;
   margin: 1rem 0;
@@ -638,6 +662,47 @@
   flex: 1;
   font-weight: 600;
   border-radius: 10px;
+}
+
+.service-card .badge {
+  border: none;
+  box-shadow: 0 6px 16px rgba(53, 96, 255, 0.16);
+}
+
+.service-card .badge.bg-success {
+  background: linear-gradient(135deg, var(--allora-primary), var(--allora-primary-dark)) !important;
+}
+
+.service-card .badge.bg-secondary {
+  background: linear-gradient(135deg, var(--allora-navy), #0a1f4c) !important;
+  color: #f8fbff !important;
+  box-shadow: 0 6px 16px rgba(14, 44, 99, 0.18);
+}
+
+.service-card .badge.bg-info {
+  background: linear-gradient(135deg, var(--allora-primary-light), var(--allora-primary)) !important;
+  color: #fff !important;
+}
+
+.service-details .badge {
+  box-shadow: none;
+}
+
+.service-actions .btn-warning {
+  background: linear-gradient(135deg, var(--allora-primary), var(--allora-primary-dark));
+  border: none;
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(53, 96, 255, 0.25);
+}
+
+.service-actions .btn-warning:hover {
+  background: linear-gradient(135deg, var(--allora-primary-dark), #0f3de6);
+  box-shadow: 0 12px 26px rgba(53, 96, 255, 0.32);
+}
+
+.service-actions .btn-danger {
+  border: none;
+  box-shadow: 0 10px 22px rgba(239, 68, 68, 0.25);
 }
 
 /* Analytics Card */
@@ -757,6 +822,40 @@
 .btn-lg {
   padding: 0.75rem 2rem;
   font-size: 1.1rem;
+}
+
+/* Notification list */
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notification-item-card {
+  border: 1px solid #e6ecf7;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(17, 42, 94, 0.08);
+}
+
+.analytics-chart-card {
+  border: 1px solid #e6ecf7;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(17, 42, 94, 0.08);
+}
+
+.sparkline-wrapper {
+  width: 100%;
+  height: 140px;
+}
+
+.sparkline-wrapper svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sparkline-dot {
+  fill: var(--allora-primary);
+  opacity: 0.7;
 }
 
 /* Modal Customization */

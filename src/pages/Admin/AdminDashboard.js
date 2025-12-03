@@ -35,19 +35,6 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = async () => {
-    if (!window.confirm("Log out of the admin dashboard?")) return;
-    try {
-      if (auth) {
-        await signOut(auth);
-      }
-    } catch (error) {
-      console.warn("[Auth] Failed to sign out admin user", error);
-    } finally {
-      navigate("/admin/login", { replace: true });
-    }
-  };
-
   const responsibilities = {
     "User Management": [
       "View, edit, suspend, or delete users.",
@@ -122,6 +109,20 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [customers, setCustomers] = useState([]);
   const [bookings, setBookings] = useState([]);
 
+  const deriveDisplayName = (data = {}) => {
+    const first = data.firstName || data.first_name;
+    const last = data.lastName || data.last_name;
+    const combined = [first, last].filter(Boolean).join(" ").trim();
+    return (
+      combined ||
+      data.name ||
+      data.Name ||
+      data.displayName ||
+      data.fullName ||
+      "Unnamed"
+    );
+  };
+
   useEffect(() => {
     if (!db) return undefined;
     return onSnapshot(collection(db, "users"), (snapshot) => {
@@ -137,7 +138,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
           );
           return {
             id: docSnap.id,
-            name: data.name || data.Name || data.displayName || data.fullName || "Unnamed",
+            name: deriveDisplayName(data),
             email: data.email || data.Email || data.emailAddress || "",
             role,
             status,
@@ -279,10 +280,19 @@ const getBadgeClass = (value, fallback = "unknown") => {
       serviceRecord?.categoryDocId ||
       categoryServices.find((c) => c.serviceDocId === serviceId)?.id;
     try {
-      await updateDoc(doc(db, SERVICE_COLLECTION, serviceId), {
+      const updateData = {
         status,
         updatedAt: serverTimestamp(),
-      });
+      };
+      
+      // Set visibility based on status
+      if (status === "Approved") {
+        updateData.visible = true;
+      } else if (status === "Rejected" || status === "Suspended") {
+        updateData.visible = false;
+      }
+      
+      await updateDoc(doc(db, SERVICE_COLLECTION, serviceId), updateData);
       if (linkedCategoryId) {
         await updateDoc(doc(db, SERVICE_CATEGORY_COLLECTION, linkedCategoryId), {
           status,
@@ -327,7 +337,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
     refreshProviderRegistrations();
   };
 
-  const notifyProviderApproval = async (provider) => {
+  const notifyProviderApproval = async (provider, password = "") => {
     if (!provider?.email) return false;
     try {
       const response = await fetch(`${API_BASE}/provider/notify-approval`, {
@@ -336,6 +346,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         body: JSON.stringify({
           email: provider.email,
           businessName: provider.businessName,
+          password,
         }),
       });
       if (!response.ok) {
@@ -359,6 +370,8 @@ const getBadgeClass = (value, fallback = "unknown") => {
         message: `${provider.businessName || provider.email || "A provider"} was ${action.toLowerCase()}.`,
         status: "Sent",
         sentAt: serverTimestamp(),
+        providerEmail: (provider.email || "").toLowerCase(),
+        providerId: provider.providerId || provider.provider_id || "",
       });
     } catch (error) {
       console.warn("[ProviderNotification] Failed to log notification", error);
@@ -367,27 +380,22 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   const approveProviderRegistration = async (id) => {
     const provider = providerRegistrations.find((p) => p.id === id);
-    if (!provider) return;
-
-    let passwordToUse = provider.password;
-    if (!passwordToUse) {
-      passwordToUse = window.prompt(
-        `No password was saved for ${provider.email}. Enter a password to create their login:`,
-        ""
-      );
-      if (!passwordToUse || passwordToUse.length < 6) {
-        alert("Approval cancelled. Please provide a password (min 6 characters).");
-        return;
-      }
+    if (!provider || !provider.email) {
+      window.alert("Provider is missing an email. Cannot approve.");
+      return;
     }
 
+    const tempPassword =
+      (provider.password && provider.password.length >= 6 ? provider.password : `Temp-${Math.random().toString(36).slice(2, 8)}!`);
+
+    let approvalData = {};
     try {
       const response = await fetch(`${API_BASE}/provider/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: provider.email,
-          password: passwordToUse,
+          password: tempPassword,
           businessName: provider.businessName,
           ownerName: provider.ownerName,
           category: provider.category,
@@ -395,23 +403,28 @@ const getBadgeClass = (value, fallback = "unknown") => {
           address: provider.address,
         }),
       });
+      approvalData = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data?.message || "Approval API failed");
+        throw new Error(approvalData?.message || "Approval API failed");
       }
     } catch (error) {
-      console.warn("[ProviderApproval] Backend approval failed", error);
-      alert(error?.message || "Could not create the provider login. Please ensure the server is running and try again.");
+      console.error("[ProviderApproval] Backend failed to approve provider", error);
+      window.alert(
+        error?.message
+          ? `Could not approve provider: ${error.message}`
+          : "Could not approve provider right now. Please try again when the approval service is available."
+      );
       return;
     }
 
+    const emailSent = approvalData?.emailSent !== false;
+
     await updateProviderStatus(id, "Active");
-    const emailSent = await notifyProviderApproval(provider);
     window.alert(
       emailSent
-        ? `Approval email has been sent to ${provider.email}.`
-        : "Provider approved, but the email could not be confirmed as sent."
+        ? `Provider approved. Email sent to ${provider.email}.`
+        : `Provider approved, but the email could not be sent automatically. Share this temporary password with the provider so they can sign in: ${tempPassword}`
     );
     logProviderNotification("Approved", provider);
   };
@@ -423,11 +436,69 @@ const getBadgeClass = (value, fallback = "unknown") => {
   };
 
   const approveListing = async (serviceId) => {
-    await updateServiceStatus(serviceId, "Approved");
+    if (!db) return;
+    if (!(await ensureAuth())) return;
+    try {
+      const serviceRecord = services.find((service) => service.id === serviceId);
+      await updateDoc(doc(db, SERVICE_COLLECTION, serviceId), {
+        status: "Approved",
+        visible: true,
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Notify the provider about the approval
+      if (serviceRecord) {
+        try {
+          await addDoc(collection(db, "Notification"), {
+            audience: "Service Providers",
+            channel: "In-App",
+            subject: "Service Approved",
+            message: `Your service "${serviceRecord.serviceName || serviceRecord.service || "Service"}" has been approved and is now visible to customers.`,
+            status: "Sent",
+            sentAt: serverTimestamp(),
+            providerEmail: (serviceRecord.providerEmail || serviceRecord.provider_email || "").toLowerCase(),
+            providerId: serviceRecord.providerId || serviceRecord.provider_id || "",
+            serviceDocId: serviceId,
+          });
+        } catch (notifyError) {
+          console.warn("[ServiceApproval] Failed to send approval notification", notifyError);
+        }
+      }
+    } catch (error) {
+      console.error("[Firebase] Failed to approve service", serviceId, error);
+      alert("Unable to approve the service. Please try again.");
+    }
   };
 
   const rejectListing = async (serviceId) => {
-    await updateServiceStatus(serviceId, "Rejected");
+    if (!db) return;
+    if (!(await ensureAuth())) return;
+    try {
+      const serviceRecord = services.find((service) => service.id === serviceId);
+      await updateServiceStatus(serviceId, "Rejected");
+      
+      // Notify the provider about the rejection
+      if (serviceRecord) {
+        try {
+          await addDoc(collection(db, "Notification"), {
+            audience: "Service Providers",
+            channel: "In-App",
+            subject: "Service Rejected",
+            message: `Your service "${serviceRecord.serviceName || serviceRecord.service || "Service"}" has been rejected. Please review and resubmit with necessary changes.`,
+            status: "Sent",
+            sentAt: serverTimestamp(),
+            providerEmail: (serviceRecord.providerEmail || serviceRecord.provider_email || "").toLowerCase(),
+            providerId: serviceRecord.providerId || serviceRecord.provider_id || "",
+            serviceDocId: serviceId,
+          });
+        } catch (notifyError) {
+          console.warn("[ServiceRejection] Failed to send rejection notification", notifyError);
+        }
+      }
+    } catch (error) {
+      console.error("[Firebase] Failed to reject service", serviceId, error);
+      alert("Unable to reject the service. Please try again.");
+    }
   };
 
   // System Management: categories
@@ -901,24 +972,46 @@ const getBadgeClass = (value, fallback = "unknown") => {
   }, []);
 
   const sendNotification = async () => {
-    if (!db) return;
-    if (!(await ensureAuth())) return;
     const subject = compose.subject.trim();
     const message = compose.message.trim();
     if (!subject || !message) {
       alert("Please enter subject and message");
       return;
     }
+
+    // Use server to send email broadcasts; keep Firestore write for in-app.
+    if (compose.channel === "Email") {
+      try {
+        const response = await fetch(`${API_BASE}/notifications/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            audience: compose.audience,
+            channel: compose.channel,
+            subject,
+            message,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.message || "Unable to send email notification.");
+        }
+        setCompose((prev) => ({ ...prev, subject: "", message: "" }));
+        alert(data?.message || "Notification sent.");
+      } catch (error) {
+        console.error("[Notification] Failed to send email", error);
+        alert(error?.message || "Unable to send email notification.");
+      }
+      return;
+    }
+
+    // In-app channel: write to Firestore.
+    if (!db) return;
+    if (!(await ensureAuth())) return;
     try {
-      console.info("[Notification] sending", {
-        audience: compose.audience,
-        channel: compose.channel,
-        subject,
-        message,
-      });
       await addDoc(collection(db, "Notification"), {
         audience: compose.audience,
-        channel: compose.channel,
+        channel: "In-App",
         subject,
         message,
         status: "Sent",
@@ -1899,4 +1992,3 @@ const getBadgeClass = (value, fallback = "unknown") => {
     </div>
   );
 }
-

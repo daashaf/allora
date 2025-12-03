@@ -1,7 +1,7 @@
 // src/components/ServiceProviderDashboard.js
 import React, { useEffect, useMemo, useState } from "react";
 import { Container, Row, Col, Card, Button, Modal, Form, Table, Badge, Alert, Nav } from "react-bootstrap";
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
 import {
   getServiceProviders,
   addServiceProvider,
@@ -12,7 +12,7 @@ import {
   updateService,
   deleteService
 } from "../../serviceProviderCRUD";
-import { COMMISSION_RATE, formatCurrency, getBookings, summarizeBookings } from "../../commission";
+import { COMMISSION_RATE, formatCurrency, summarizeBookings } from "../../commission";
 import NavigationBar from "../../components/NavigationBar";
 import { auth, db, ensureFirebaseAuth } from "../../firebase";
 import "../Customer/CustomerDashboard.css";
@@ -50,9 +50,86 @@ export default function ServiceProviderDashboard() {
   const [activeView, setActiveView] = useState("overview");
   const [bookings, setBookings] = useState([]);
   const [providerNotifications, setProviderNotifications] = useState([]);
+  const [lastSeenProviderNotifications, setLastSeenProviderNotifications] = useState(() => {
+    const stored = localStorage.getItem("provider-notifications-last-seen");
+    return stored ? Number(stored) : 0;
+  });
+  const [providerHiddenBefore, setProviderHiddenBefore] = useState(() => {
+    const stored = localStorage.getItem("provider-notifications-hidden-before");
+    return stored ? Number(stored) : 0;
+  });
+  const [newNotificationBanner, setNewNotificationBanner] = useState(null);
   const [currentEmail, setCurrentEmail] = useState("");
-  const [bookingView, setBookingView] = useState("all");
   const [providerUnreadCount, setProviderUnreadCount] = useState(0);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const newBookings = useMemo(
+    () =>
+      bookings.filter((b) => {
+        const status = (b.status || "").toLowerCase();
+        return status === "" || status === "pending" || status === "new";
+      }),
+    [bookings]
+  );
+  const managedBookings = useMemo(
+    () =>
+      bookings.filter((b) => {
+        const status = (b.status || "").toLowerCase();
+        return status && status !== "pending" && status !== "new";
+      }),
+    [bookings]
+  );
+
+  const providerProfile = useMemo(() => {
+    const email = (currentEmail || "").toLowerCase();
+    if (!email) return null;
+    return (
+      providers.find((p) => (p.email || p.emailAddress || p.providerEmail || "").toLowerCase() === email) ||
+      providers.find((p) => (p.ownerEmail || p.contactEmail || "").toLowerCase() === email) ||
+      null
+    );
+  }, [providers, currentEmail]);
+
+  const providerIdLower = useMemo(
+    () => String(providerProfile?.providerId || providerProfile?.provider_id || "").toLowerCase(),
+    [providerProfile]
+  );
+
+  const providerEmails = useMemo(() => {
+    const emailSet = new Set(
+      [
+        currentEmail,
+        providerProfile?.email,
+        providerProfile?.emailAddress,
+        providerProfile?.providerEmail,
+        providerProfile?.ownerEmail,
+        providerProfile?.contactEmail,
+      ]
+        .filter(Boolean)
+        .map((e) => String(e).toLowerCase())
+    );
+    return emailSet;
+  }, [currentEmail, providerProfile]);
+
+  const providerServices = useMemo(() => {
+    if (!services.length) return [];
+    return services.filter((svc) => {
+      const svcProviderId = String(
+        svc.providerId || svc.provider_id || svc.provider || svc.providerIdNormalized || ""
+      ).toLowerCase();
+      const svcProviderEmail = String(
+        svc.providerEmail || svc.provider_email || svc["provider email"] || ""
+      ).toLowerCase();
+      const matchesId = providerIdLower && svcProviderId === providerIdLower;
+      const matchesEmail = svcProviderEmail && providerEmails.has(svcProviderEmail);
+      return matchesId || matchesEmail;
+    }).sort((a, b) => {
+      // Sort by status: Approved first, then Pending, then others
+      const statusOrder = { "Approved": 0, "Pending": 1, "Rejected": 2, "Suspended": 3 };
+      const aStatus = statusOrder[a.status] ?? 4;
+      const bStatus = statusOrder[b.status] ?? 4;
+      return aStatus - bStatus;
+    });
+  }, [services, providerEmails, providerIdLower]);
 
   const fetchProviders = async () => {
     try {
@@ -91,33 +168,81 @@ export default function ServiceProviderDashboard() {
   useEffect(() => {
     fetchProviders();
     let unsubscribeServices;
-    fetchServices().then((unsub) => {
-      unsubscribeServices = unsub;
-    });
+    const handleFocus = () => {
+      fetchServices().then((unsub) => {
+        unsubscribeServices = unsub;
+      });
+    };
+    
+    window.addEventListener("focus", handleFocus);
+    handleFocus(); 
+
     const unsubAuth = auth?.onAuthStateChanged?.((user) => {
       setCurrentEmail(user?.email || "");
     });
+
     return () => {
       if (unsubscribeServices) unsubscribeServices();
       if (unsubAuth) unsubAuth();
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
   useEffect(() => {
     if (!db || !currentEmail) return undefined;
     let mounted = true;
-    const notificationsQuery = query(
-      collection(db, "Notification"),
-      where("providerEmail", "==", currentEmail.toLowerCase()),
-      orderBy("sentAt", "desc")
-    );
+    const notificationsQuery = query(collection(db, "Notification"), orderBy("sentAt", "desc"));
     const unsubscribe = onSnapshot(
       notificationsQuery,
       (snapshot) => {
         if (!mounted) return;
-        const docs = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-        setProviderNotifications(docs);
-        setProviderUnreadCount(docs.length);
+        const currentEmailLower = currentEmail.toLowerCase();
+        const docs = snapshot.docs
+          .map((docSnap) => {
+            const data = docSnap.data();
+            const hasTimestamp = typeof data.sentAt?.toMillis === "function";
+            const sentOrder = hasTimestamp ? data.sentAt.toMillis() : Date.parse(data.sentAt || "") || 0;
+            const sentAtDisplay = hasTimestamp
+              ? data.sentAt.toDate().toLocaleString()
+              : data.sentAt || "";
+            return { id: docSnap.id, ...data, sentOrder, sentAt: sentAtDisplay };
+          })
+          .filter((note) => {
+            const audience = (note.audience || "").toLowerCase();
+            const channel = (note.channel || "").toLowerCase();
+            const matchesChannel =
+              channel.includes("app") ||
+              channel === "in-app" ||
+              channel.includes("email");
+            const noteProviderEmail = (note.providerEmail || note.email || "").toLowerCase();
+            const matchesEmail =
+              noteProviderEmail && providerEmails.has(noteProviderEmail);
+            const noteProviderId = (note.providerId || note.provider_id || "").toLowerCase();
+            const matchesProviderId = providerIdLower && noteProviderId === providerIdLower;
+            const isProviderAudience =
+              audience.includes("provider") || audience.includes("service provider");
+            // Only surface notifications meant for this provider or provider-wide broadcasts.
+            return (
+              matchesChannel &&
+              isProviderAudience &&
+              (matchesEmail || matchesProviderId)
+            );
+          })
+          .sort((a, b) => b.sentOrder - a.sentOrder);
+
+        const visibleDocs = docs.filter(
+          (note) => (note.sentOrder || 0) > providerHiddenBefore
+        );
+
+        setProviderNotifications(visibleDocs);
+        const unread = visibleDocs.filter((n) => (n.sentOrder || 0) > lastSeenProviderNotifications).length;
+        setProviderUnreadCount(unread);
+        if (
+          visibleDocs.length &&
+          (visibleDocs[0].sentOrder || 0) > lastSeenProviderNotifications
+        ) {
+          setNewNotificationBanner(visibleDocs[0]);
+        }
       },
       (error) => {
         console.warn("[ProviderDashboard] Failed to load notifications", error);
@@ -127,100 +252,97 @@ export default function ServiceProviderDashboard() {
       mounted = false;
       if (unsubscribe) unsubscribe();
     };
-  }, [currentEmail]);
+  }, [currentEmail, lastSeenProviderNotifications, providerHiddenBefore, providerEmails, providerIdLower]);
+
+  const markProviderNotificationsSeen = () => {
+    const now = Date.now();
+    setLastSeenProviderNotifications(now);
+    localStorage.setItem("provider-notifications-last-seen", String(now));
+    setProviderUnreadCount(0);
+    setNewNotificationBanner(null);
+  };
+
+  const clearProviderNotifications = () => {
+    const now = Date.now();
+    setLastSeenProviderNotifications(now);
+    setProviderHiddenBefore(now);
+    localStorage.setItem("provider-notifications-last-seen", String(now));
+    localStorage.setItem("provider-notifications-hidden-before", String(now));
+    setProviderUnreadCount(0);
+    setProviderNotifications([]);
+    setNewNotificationBanner(null);
+  };
 
   useEffect(() => {
     if (!db || !currentEmail) return undefined;
     let mounted = true;
-    const bookingsQuery = query(
-      collection(db, "Order"),
-      where("providerEmail", "==", currentEmail.toLowerCase()),
-      orderBy("createdAt", "desc")
-    );
-    const unsubscribe = onSnapshot(
-      bookingsQuery,
-      (snapshot) => {
-        if (!mounted) return;
-        const docs = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-        setBookings(docs);
-      },
-      (error) => {
+    const bookingMap = new Map();
+
+    const sortBookings = (items) =>
+      items.sort((a, b) => {
+        const aTime =
+          typeof a.createdAt?.toMillis === "function"
+            ? a.createdAt.toMillis()
+            : Date.parse(a.createdAt || "") || 0;
+        const bTime =
+          typeof b.createdAt?.toMillis === "function"
+            ? b.createdAt.toMillis()
+            : Date.parse(b.createdAt || "") || 0;
+        return bTime - aTime;
+      });
+
+    const normalizeBooking = (booking) => {
+      const providerEmail =
+        booking.providerEmail ||
+        booking.provider_email ||
+        booking["provider email"] ||
+        booking.provider;
+      const providerIdValue =
+        booking.providerId ||
+        booking.provider_id ||
+        booking["provider id"] ||
+        booking.provider;
+      return {
+        ...booking,
+        providerEmailNormalized: providerEmail ? String(providerEmail).toLowerCase() : "",
+        providerIdNormalized: providerIdValue ? String(providerIdValue).toLowerCase() : "",
+      };
+    };
+
+    const handleSnapshot = (snapshot) => {
+      if (!mounted) return;
+      bookingMap.clear();
+      snapshot.docs.forEach((docSnap) => bookingMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() }));
+      const filtered = Array.from(bookingMap.values()).map(normalizeBooking).filter((booking) => {
+        const bookingEmail = booking.providerEmailNormalized;
+        const bookingProviderId = booking.providerIdNormalized;
+        const matchesEmail = bookingEmail && providerEmails.has(bookingEmail);
+        const matchesProviderId = providerIdLower && bookingProviderId === providerIdLower;
+        return matchesEmail || matchesProviderId;
+      });
+      setBookings(sortBookings(filtered));
+    };
+
+    const unsubscribers = [];
+    const allQuery = query(collection(db, "Order"));
+    unsubscribers.push(
+      onSnapshot(allQuery, handleSnapshot, (error) => {
         console.warn("[ProviderDashboard] Failed to load bookings", error);
-      }
+      })
     );
+
     return () => {
       mounted = false;
-      if (unsubscribe) unsubscribe();
+      unsubscribers.forEach((u) => u && u());
     };
-  }, [currentEmail]);
+  }, [currentEmail, providerEmails, providerIdLower]);
 
   // ... (keep all your existing handler functions exactly the same)
   const handleProviderChange = (e) => {
     setProviderFormData({ ...providerFormData, [e.target.name]: e.target.value });
   };
 
-  const handleAddProvider = () => {
-    setProviderFormData({
-      providerId: "",
-      businessName: "",
-      ownerName: "",
-      email: "",
-      phone: "",
-      address: "",
-      category: "Home Services",
-      status: "Pending"
-    });
-    setEditingProviderId(null);
-    setShowProviderModal(true);
-  };
-
-  const handleEditProvider = (provider) => {
-    setProviderFormData({
-      providerId: provider.providerId,
-      businessName: provider.businessName,
-      ownerName: provider.ownerName,
-      email: provider.email,
-      phone: provider.phone,
-      address: provider.address,
-      category: provider.category,
-      status: provider.status
-    });
-    setEditingProviderId(provider.id);
-    setShowProviderModal(true);
-  };
-
-  const handleSaveProvider = async () => {
-    if (!providerFormData.providerId || !providerFormData.businessName || !providerFormData.ownerName || !providerFormData.email || !providerFormData.phone) {
-      setMessage({ type: "error", text: "Please fill all required fields" });
-      return;
-    }
-
-    try {
-      if (editingProviderId) {
-        await updateServiceProvider(editingProviderId, providerFormData);
-        setMessage({ type: "success", text: "Service provider updated successfully!" });
-      } else {
-        await addServiceProvider(providerFormData);
-        setMessage({ type: "success", text: "Service provider registered successfully!" });
-      }
-      setShowProviderModal(false);
-      fetchProviders();
-    } catch (error) {
-      setMessage({ type: "error", text: "Operation failed" });
-    }
-  };
-
-  const handleDeleteProvider = async (id) => {
-    if (window.confirm("Are you sure you want to delete this service provider?")) {
-      try {
-        await deleteServiceProvider(id);
-        setMessage({ type: "success", text: "Service provider deleted successfully!" });
-        fetchProviders();
-      } catch (error) {
-        setMessage({ type: "error", text: "Failed to delete service provider" });
-      }
-    }
-  };
+  const handleSaveProvider = async () => {};
 
   const handleServiceChange = (e) => {
     const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
@@ -274,8 +396,10 @@ export default function ServiceProviderDashboard() {
           price: serviceFormData.price,
           duration: serviceFormData.duration,
           category: serviceFormData.category,
-          providerId: serviceFormData.providerId,
-          provider: serviceFormData.providerId,
+          providerId: serviceFormData.providerId || providerProfile?.providerId || providerProfile?.provider_id || "",
+          provider: serviceFormData.providerId || providerProfile?.providerId || providerProfile?.provider_id || "",
+          providerEmail: currentEmail.toLowerCase(),
+          provider_email: currentEmail.toLowerCase(),
           available: serviceFormData.available,
           status: "Pending",
           visible: false,
@@ -346,34 +470,134 @@ export default function ServiceProviderDashboard() {
 
   const categories = ["Home Services", "Beauty & Wellness", "Professional Services", "Education & Training", "Health & Fitness", "Technology", "Other"];
 
-  const activeProviders = providers.filter(p => p.status === "Active").length;
-  const pendingProviders = providers.filter(p => p.status === "Pending").length;
-  const availableServices = services.filter(s => s.available).length;
+  const scopedProviders = useMemo(() => {
+    if (providerProfile) return [providerProfile];
+    if (!providerEmails.size) return [];
+    return providers.filter(
+      (p) => providerEmails.has(String(p.email || p.emailAddress || p.providerEmail || "").toLowerCase())
+    );
+  }, [providerProfile, providerEmails, providers]);
+
+  const activeProviders = scopedProviders.filter((p) => p.status === "Active").length;
+  const pendingProviders = scopedProviders.filter((p) => p.status === "Pending").length;
+  const availableServices = providerServices.filter((s) => s.available).length;
   const bookingTotals = useMemo(() => summarizeBookings(bookings), [bookings]);
   const commissionRatePercent = Math.round((COMMISSION_RATE || 0) * 100);
-  const unreadProviderNotifications = providerUnreadCount;
+  const analyticsStats = useMemo(() => {
+    const total = bookings.length;
+    const completed = bookings.filter((b) => (b.status || "").toLowerCase() === "completed").length;
+    const accepted = bookings.filter((b) => {
+      const status = (b.status || "").toLowerCase();
+      return status === "accepted" || status === "in progress" || status === "completed";
+    }).length;
+    const newOrPending = bookings.filter((b) => {
+      const status = (b.status || "").toLowerCase();
+      return status === "pending" || status === "new";
+    }).length;
+    const acceptanceRate = total ? Math.round(((accepted || 0) / total) * 100) : 0;
+    return {
+      total,
+      completed,
+      pending: newOrPending,
+      acceptanceRate,
+      providerPayout: bookingTotals.providerTotal || 0,
+      revenue: (bookingTotals.providerTotal || 0) + (bookingTotals.adminTotal || 0),
+    };
+  }, [bookings, bookingTotals]);
+
+  const parseTimestamp = (value) => {
+    if (!value) return null;
+    if (typeof value?.toDate === "function") return value.toDate();
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : new Date(parsed);
+  };
+
+  const bookingsSeries = useMemo(() => {
+    const days = 30;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const seriesMap = new Map();
+    for (let i = 0; i < days; i += 1) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - (days - 1 - i));
+      const key = d.toISOString().slice(0, 10);
+      seriesMap.set(key, { label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }), count: 0 });
+    }
+    bookings.forEach((b) => {
+      const ts = parseTimestamp(b.createdAt || b.created_at || b.created || b.sentAt);
+      if (!ts) return;
+      ts.setHours(0, 0, 0, 0);
+      const key = ts.toISOString().slice(0, 10);
+      if (seriesMap.has(key)) {
+        const existing = seriesMap.get(key);
+        seriesMap.set(key, { ...existing, count: (existing.count || 0) + 1 });
+      }
+    });
+    return Array.from(seriesMap.values());
+  }, [bookings]);
+
+  const bookingNotifications = useMemo(
+    () =>
+      providerNotifications.filter((n) => {
+        const subject = (n.subject || "").toLowerCase();
+        const message = (n.message || "").toLowerCase();
+        return subject.includes("booking") || message.includes("booking");
+      }),
+    [providerNotifications]
+  );
+
+  const getBookingStatusVariant = (status) => {
+    const normalized = String(status || "").toLowerCase();
+    if (normalized === "completed") return "success";
+    if (normalized === "in progress") return "warning";
+    if (normalized === "accepted") return "primary";
+    if (normalized === "cancelled" || normalized === "canceled") return "danger";
+    return "secondary";
+  };
 
   const updateBookingStatus = async (id, status) => {
-    try {
-      if (db && id) {
-        await updateDoc(doc(db, "Order", id), { status });
-      }
-      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to update booking status" });
+    if (!id) {
+      setMessage({ type: "error", text: "Invalid booking ID" });
+      return;
     }
+    
+    try {
+      if (db) {
+        const bookingRef = doc(db, "Order", id);
+        await updateDoc(bookingRef, { 
+          status,
+          updatedAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      console.warn("Firebase update failed, updating locally only:", error);
+    }
+    
+    // Always update local state regardless of Firebase success/failure
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
+    setMessage({ type: "success", text: `Booking status updated to ${status}` });
   };
 
   const deleteBookingById = async (id) => {
-    try {
-      if (db && id) {
-        await deleteDoc(doc(db, "Order", id));
-      }
-      setBookings((prev) => prev.filter((b) => b.id !== id));
-      setMessage({ type: "success", text: "Booking deleted." });
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to delete booking" });
+    if (!id) {
+      setMessage({ type: "error", text: "Invalid booking ID" });
+      return;
     }
+    
+    if (!window.confirm("Are you sure you want to delete this booking?")) return;
+    
+    try {
+      if (db) {
+        const bookingRef = doc(db, "Order", id);
+        await deleteDoc(bookingRef);
+      }
+    } catch (error) {
+      console.warn("Firebase delete failed, deleting locally only:", error);
+    }
+    
+    // Always update local state regardless of Firebase success/failure
+    setBookings((prev) => prev.filter((b) => b.id !== id));
+    setMessage({ type: "success", text: "Booking deleted." });
   };
 
   return (
@@ -383,7 +607,7 @@ export default function ServiceProviderDashboard() {
           activeSection="provider"
           notificationCount={providerUnreadCount}
           notifications={providerNotifications}
-          onNotificationsViewed={() => setProviderUnreadCount(0)}
+          onNotificationsViewed={markProviderNotificationsSeen}
         />
         <div className="dashboard-wrapper">
           <Container fluid className="dashboard-content">
@@ -396,6 +620,18 @@ export default function ServiceProviderDashboard() {
           >
             <i className={`bi bi-${message.type === "error" ? "exclamation-circle" : "check-circle"}`}></i>
             {message.text}
+          </Alert>
+        )}
+
+        {newNotificationBanner && (
+          <Alert
+            variant="info"
+            dismissible
+            onClose={markProviderNotificationsSeen}
+            className="custom-alert"
+          >
+            <i className="bi bi-bell"></i> New message:{" "}
+            <strong>{newNotificationBanner.subject || "Notification"}</strong>
           </Alert>
         )}
 
@@ -437,6 +673,23 @@ export default function ServiceProviderDashboard() {
               <i className="bi bi-bar-chart-fill"></i> Analytics
             </Nav.Link>
           </Nav.Item>
+          <Nav.Item>
+            <Nav.Link
+              active={activeView === "notifications"}
+              onClick={() => {
+                setActiveView("notifications");
+                markProviderNotificationsSeen();
+              }}
+              className="nav-link-custom"
+            >
+              <i className="bi bi-bell-fill"></i> Notifications{" "}
+              {providerUnreadCount > 0 && (
+                <Badge bg="danger" pill className="ms-2">
+                  {providerUnreadCount}
+                </Badge>
+              )}
+            </Nav.Link>
+          </Nav.Item>
         </Nav>
 
         {/* Overview Section */}
@@ -449,10 +702,10 @@ export default function ServiceProviderDashboard() {
                     <div className="stat-icon">
                       <i className="bi bi-people"></i>
                     </div>
-                    <h3 className="stat-number">{providers.length}</h3>
-                    <p className="stat-label">Total Providers</p>
+                    <h3 className="stat-number">{scopedProviders.length}</h3>
+                    <p className="stat-label">Your Provider Profile{scopedProviders.length !== 1 ? "s" : ""}</p>
                     <div className="stat-badge">
-                      <Badge bg="primary">+{providers.length > 0 ? Math.round(providers.length * 0.12) : 0}% this month</Badge>
+                      <Badge bg="primary">Live</Badge>
                     </div>
                   </Card.Body>
                 </Card>
@@ -477,8 +730,8 @@ export default function ServiceProviderDashboard() {
                     <div className="stat-icon">
                       <i className="bi bi-briefcase"></i>
                     </div>
-                    <h3 className="stat-number">{services.length}</h3>
-                    <p className="stat-label">Total Services</p>
+                    <h3 className="stat-number">{providerServices.length}</h3>
+                    <p className="stat-label">Your Services</p>
                     <div className="stat-badge">
                       <Badge bg="warning">{availableServices} Available</Badge>
                     </div>
@@ -538,15 +791,15 @@ export default function ServiceProviderDashboard() {
             <div className="section-header">
               <div>
                 <h3>Services Catalog</h3>
-                <p className="text-muted">Manage all available services</p>
+                <p className="text-muted">Manage all available services. Services need admin approval before becoming visible to customers.</p>
               </div>
               <Button variant="primary" size="lg" onClick={handleAddService}>
                 <i className="bi bi-plus-circle"></i> Add Service
               </Button>
             </div>
 
-            <Row className="g-4">
-              {services.length === 0 ? (
+            {providerServices.length === 0 ? (
+              <Row className="g-4">
                 <Col xs={12}>
                   <Card className="text-center py-5">
                     <Card.Body>
@@ -555,47 +808,62 @@ export default function ServiceProviderDashboard() {
                     </Card.Body>
                   </Card>
                 </Col>
-              ) : (
-                services.map((service) => (
-                  <Col lg={4} md={6} key={service.id}>
-                    <Card className="service-card">
-                      <Card.Body>
-                        <div className="service-header">
-                          <Badge bg={service.available ? "success" : "secondary"}>
-                            {service.available ? "Available" : "Unavailable"}
-                          </Badge>
-                          <Badge bg="info">{service.category}</Badge>
-                        </div>
-                        <h5 className="mt-3">{service.serviceName}</h5>
-                        <p className="text-muted">{service.description}</p>
-                        <div className="service-details">
-                          <div className="detail-item">
-                            <i className="bi bi-tag"></i>
-                            <strong>${service.price}</strong>
-                          </div>
-                          <div className="detail-item">
-                            <i className="bi bi-clock"></i>
-                            <span>{service.duration}</span>
-                          </div>
-                          <div className="detail-item">
-                            <i className="bi bi-person"></i>
-                            <span>{service.providerId}</span>
-                          </div>
-                        </div>
-                        <div className="service-actions">
-                          <Button size="sm" variant="warning" onClick={() => handleEditService(service)}>
-                            <i className="bi bi-pencil"></i> Edit
-                          </Button>
-                          <Button size="sm" variant="danger" onClick={() => handleDeleteService(service.id)}>
-                            <i className="bi bi-trash"></i> Delete
-                          </Button>
-                        </div>
-                      </Card.Body>
-                    </Card>
-                  </Col>
-                ))
-              )}
-            </Row>
+              </Row>
+            ) : (
+              <Card className="table-card wider-table">
+                <Card.Body className="p-0">
+                  <Table responsive hover className="modern-table mb-0">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>Service</th>
+                        <th>Category</th>
+                        <th>Price</th>
+                        <th>Duration</th>
+                        <th>Provider</th>
+                        <th style={{ width: 170 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {providerServices.map((service) => (
+                        <tr key={service.id}>
+                          <td>
+                            <div className="d-flex flex-column gap-1">
+                              <Badge bg={service.available ? "success" : "secondary"}>
+                                {service.available ? "Available" : "Unavailable"}
+                              </Badge>
+                              <Badge bg={service.status === "Approved" ? "success" : service.status === "Pending" ? "warning" : "danger"}>
+                                {service.status || "Pending"}
+                              </Badge>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex flex-column">
+                              <strong>{service.serviceName}</strong>
+                              <small className="text-muted">{service.description || "No description"}</small>
+                            </div>
+                          </td>
+                          <td>
+                            <Badge bg="info">{service.category || "General"}</Badge>
+                          </td>
+                          <td>{service.price ? `$${service.price}` : "-"}</td>
+                          <td>{service.duration || "-"}</td>
+                          <td>{service.providerId || "-"}</td>
+                          <td className="table-actions d-flex gap-2">
+                            <Button size="sm" variant="warning" onClick={() => handleEditService(service)}>
+                              <i className="bi bi-pencil"></i> Edit
+                            </Button>
+                            <Button size="sm" variant="danger" onClick={() => handleDeleteService(service.id)}>
+                              <i className="bi bi-trash"></i> Delete
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </Card.Body>
+              </Card>
+            )}
           </>
         )}
 
@@ -607,30 +875,27 @@ export default function ServiceProviderDashboard() {
                 <h3>Bookings</h3>
                 <p className="text-muted">New customer requests and confirmed bookings</p>
               </div>
-              <div className="d-flex gap-2">
-                <Button
-                  variant={bookingView === "all" ? "primary" : "outline-primary"}
-                  onClick={() => setBookingView("all")}
-                >
-                  All
-                </Button>
-                <Button
-                  variant={bookingView === "new" ? "primary" : "outline-primary"}
-                  onClick={() => setBookingView("new")}
-                >
-                  New
-                </Button>
-              </div>
             </div>
 
             <Row className="g-4">
               <Col xs={12}>
                 <Card className="table-card wider-table">
+                  <Card.Header>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h5 className="mb-0">Active bookings</h5>
+                        <small className="text-muted">
+                          Bookings remain here after you take action so you can keep updating their status.
+                        </small>
+                      </div>
+                      <Badge bg="primary">{managedBookings.length}</Badge>
+                    </div>
+                  </Card.Header>
                   <Card.Body className="p-0">
-                    {bookings.length === 0 ? (
+                    {managedBookings.length === 0 ? (
                       <div className="text-center py-5">
-                        <i className="bi bi-inbox" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
-                        <p className="text-muted mt-3">No bookings yet.</p>
+                        <i className="bi bi-clipboard-check" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
+                        <p className="text-muted mt-3">No active bookings yet.</p>
                       </div>
                     ) : (
                       <Table responsive hover className="modern-table">
@@ -645,65 +910,159 @@ export default function ServiceProviderDashboard() {
                           </tr>
                         </thead>
                         <tbody>
-                          {bookings
-                            .filter((b) => {
-                              if (bookingView === "new") {
-                                const status = (b.status || "").toLowerCase();
-                                return status === "pending" || status === "new";
-                              }
-                              return true;
-                            })
-                            .map((booking) => (
-                              <tr key={booking.id}>
-                                <td>{booking.service || "Service"}</td>
-                                <td>{booking.customerName || booking.email || booking.customerEmail || "Customer"}</td>
-                                <td>{booking.city || "-"}</td>
-                                <td>{formatCurrency(booking.totalPrice || booking.basePrice || 0)}</td>
-                                <td>
-                                  <Badge
-                                    bg={
-                                      (booking.status || "").toLowerCase() === "completed"
-                                        ? "success"
-                                        : (booking.status || "").toLowerCase() === "in progress"
-                                        ? "warning"
-                                        : "secondary"
-                                    }
-                                  >
-                                    {booking.status || "Pending"}
-                                  </Badge>
+                          {managedBookings.map((booking) => (
+                            <tr key={booking.id}>
+                              <td>{booking.service || "Service"}</td>
+                              <td>{booking.customerName || booking.email || booking.customerEmail || "Customer"}</td>
+                              <td>{booking.city || "-"}</td>
+                              <td>{formatCurrency(booking.totalPrice || booking.basePrice || 0)}</td>
+                              <td>
+                                <Badge bg={getBookingStatusVariant(booking.status)}>{booking.status || "Pending"}</Badge>
+                              </td>
+                              <td className="table-actions d-flex gap-2 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  variant="warning"
+                                  onClick={() => updateBookingStatus(booking.id, "In Progress")}
+                                >
+                                  In Progress
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  onClick={() => updateBookingStatus(booking.id, "Completed")}
+                                >
+                                  Complete
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => updateBookingStatus(booking.id, "Pending")}
+                                >
+                                  Move to Pending
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  onClick={() => deleteBookingById(booking.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                    )}
+                  </Card.Body>
+                </Card>
+              </Col>
+
+              <Col xs={12}>
+                <Card className="table-card wider-table">
+                  <Card.Header>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h5 className="mb-0">New booking requests</h5>
+                        <small className="text-muted">
+                          Booking notifications appear here. Take action to move them into the active list above and keep working on them.
+                        </small>
+                      </div>
+                      <Badge bg="primary">{newBookings.length}</Badge>
+                    </div>
+                  </Card.Header>
+                  <Card.Body className="p-0">
+                    {bookingNotifications.length > 0 && (
+                      <div className="p-3 border-bottom bg-light">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <div>
+                            <strong>Booking notifications</strong>
+                            <div className="text-muted small">Review each message and take action below.</div>
+                          </div>
+                          <Badge bg="primary">{bookingNotifications.length}</Badge>
+                        </div>
+                        <Table responsive hover className="modern-table mb-0">
+                          <thead>
+                            <tr>
+                              <th>Subject</th>
+                              <th>Message</th>
+                              <th>Sent</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bookingNotifications.map((note) => (
+                              <tr key={note.id} onClick={() => setSelectedNotification(note)} style={{ cursor: "pointer" }}>
+                                <td>{note.subject || "Booking update"}</td>
+                                <td style={{ whiteSpace: "pre-line" }}>
+                                  {(note.message || "").slice(0, 120)}
+                                  {(note.message || "").length > 120 ? "..." : ""}
                                 </td>
-                                <td className="table-actions">
-                                  <Button
-                                    size="sm"
-                                    variant="success"
-                                    onClick={() => updateBookingStatus(booking.id, "Accepted")}
-                                  >
-                                    Accept
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="warning"
-                                    onClick={() => updateBookingStatus(booking.id, "In Progress")}
-                                  >
-                                    In Progress
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="primary"
-                                    onClick={() => updateBookingStatus(booking.id, "Completed")}
-                                  >
-                                    Complete
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="danger"
-                                    onClick={() => deleteBookingById(booking.id)}
-                                  >
-                                    Delete
-                                  </Button>
-                                </td>
+                                <td>{note.sentAt || "Just now"}</td>
                               </tr>
                             ))}
+                          </tbody>
+                        </Table>
+                      </div>
+                    )}
+                    {newBookings.length === 0 ? (
+                      <div className="text-center py-5">
+                        <i className="bi bi-inbox" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
+                        <p className="text-muted mt-3">No new bookings yet.</p>
+                      </div>
+                    ) : (
+                      <Table responsive hover className="modern-table">
+                        <thead>
+                          <tr>
+                            <th>Service</th>
+                            <th>Customer</th>
+                            <th>City</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {newBookings.map((booking) => (
+                            <tr key={booking.id}>
+                              <td>{booking.service || "Service"}</td>
+                              <td>{booking.customerName || booking.email || booking.customerEmail || "Customer"}</td>
+                              <td>{booking.city || "-"}</td>
+                              <td>{formatCurrency(booking.totalPrice || booking.basePrice || 0)}</td>
+                              <td>
+                                <Badge bg={getBookingStatusVariant(booking.status)}>{booking.status || "Pending"}</Badge>
+                              </td>
+                              <td className="table-actions d-flex gap-2 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  onClick={() => updateBookingStatus(booking.id, "Accepted")}
+                                >
+                                  Accept
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="warning"
+                                  onClick={() => updateBookingStatus(booking.id, "In Progress")}
+                                >
+                                  In Progress
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  onClick={() => updateBookingStatus(booking.id, "Completed")}
+                                >
+                                  Complete
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  onClick={() => deleteBookingById(booking.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </Table>
                     )}
@@ -714,7 +1073,219 @@ export default function ServiceProviderDashboard() {
           </>
         )}
 
-        {/* Analytics Section intentionally removed from provider dashboard */}
+        {/* Notifications Section */}
+        {activeView === "notifications" && (
+          <>
+            <div className="section-header">
+              <div>
+                <h3>Notifications</h3>
+                <p className="text-muted">Latest updates sent to your account</p>
+              </div>
+              <div className="d-flex gap-2">
+                <Button
+                  variant="outline-secondary"
+                  onClick={clearProviderNotifications}
+                  disabled={!providerNotifications.length}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+
+            <Card className="table-card wider-table">
+              <Card.Body className="p-0">
+                {providerNotifications.length === 0 ? (
+                  <div className="text-center py-5">
+                    <i className="bi bi-bell" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
+                    <p className="text-muted mt-3">No notifications yet.</p>
+                  </div>
+                ) : (
+                  <Table responsive hover className="modern-table mb-0">
+                    <thead>
+                      <tr>
+                        <th>Subject</th>
+                        <th>Message</th>
+                        <th>Channel</th>
+                        <th>Sent</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {providerNotifications.slice(0, 30).map((note) => (
+                        <tr key={note.id}>
+                          <td>{note.subject || "Notification"}</td>
+                          <td style={{ whiteSpace: "pre-line" }}>{note.message || "No message provided."}</td>
+                          <td>
+                            <Badge bg={String(note.channel || "").toLowerCase().includes("email") ? "info" : "primary"}>
+                              {note.channel || "In-App"}
+                            </Badge>
+                          </td>
+                          <td>{note.sentAt || "Just now"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
+              </Card.Body>
+            </Card>
+          </>
+        )}
+
+        {/* Analytics Section */}
+        {activeView === "analytics" && (
+          <>
+            <div className="section-header">
+              <div>
+                <h3>Analytics</h3>
+                <p className="text-muted">Live booking insights</p>
+              </div>
+            </div>
+
+            <Row className="g-4 mb-4">
+              <Col lg={3} md={6}>
+                <Card className="stat-card stat-card-blue">
+                  <Card.Body>
+                    <p className="stat-label">Total bookings</p>
+                    <h3 className="stat-number">{analyticsStats.total}</h3>
+                  </Card.Body>
+                </Card>
+              </Col>
+              <Col lg={3} md={6}>
+                <Card className="stat-card stat-card-green">
+                  <Card.Body>
+                    <p className="stat-label">Completed</p>
+                    <h3 className="stat-number">{analyticsStats.completed}</h3>
+                  </Card.Body>
+                </Card>
+              </Col>
+              <Col lg={3} md={6}>
+                <Card className="stat-card stat-card-orange">
+                  <Card.Body>
+                    <p className="stat-label">Acceptance rate</p>
+                    <h3 className="stat-number">{analyticsStats.acceptanceRate}%</h3>
+                  </Card.Body>
+                </Card>
+              </Col>
+              <Col lg={3} md={6}>
+                <Card className="stat-card stat-card-purple">
+                  <Card.Body>
+                    <p className="stat-label">Provider payout</p>
+                    <h3 className="stat-number">{formatCurrency(analyticsStats.providerPayout)}</h3>
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+
+            <Row className="g-4">
+              <Col lg={7} md={12}>
+                <Card className="analytics-chart-card">
+                  <Card.Body>
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <div>
+                        <h6 className="mb-0">Bookings last 30 days</h6>
+                        <small className="text-muted">Live from recent activity</small>
+                      </div>
+                    </div>
+                    <div className="sparkline-wrapper">
+                      <svg viewBox="0 0 300 120" preserveAspectRatio="none">
+                        <polyline
+                          fill="none"
+                          stroke="url(#sparkGradient)"
+                          strokeWidth="3"
+                          points={bookingsSeries
+                            .map((d, idx) => {
+                              const x = (300 / Math.max(bookingsSeries.length - 1, 1)) * idx;
+                              const maxY = Math.max(...bookingsSeries.map((p) => p.count), 1);
+                              const y = 110 - (d.count / maxY) * 100;
+                              return `${x},${y}`;
+                            })
+                            .join(" ")}
+                        />
+                        {bookingsSeries.map((d, idx) => {
+                          const x = (300 / Math.max(bookingsSeries.length - 1, 1)) * idx;
+                          const maxY = Math.max(...bookingsSeries.map((p) => p.count), 1);
+                          const y = 110 - (d.count / maxY) * 100;
+                          return <circle key={d.label} cx={x} cy={y} r="3" className="sparkline-dot" />;
+                        })}
+                        <defs>
+                          <linearGradient id="sparkGradient" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stopColor="var(--allora-primary)" />
+                            <stop offset="100%" stopColor="var(--allora-primary-dark)" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    </div>
+                    <div className="d-flex justify-content-between text-muted small mt-2">
+                      <span>{bookingsSeries[0]?.label || ""}</span>
+                      <span>{bookingsSeries[bookingsSeries.length - 1]?.label || ""}</span>
+                    </div>
+                  </Card.Body>
+                </Card>
+              </Col>
+              <Col lg={5} md={12}>
+                <Card className="table-card">
+                  <Card.Body className="p-0">
+                    <Table responsive hover className="modern-table mb-0">
+                      <thead>
+                        <tr>
+                          <th>Status</th>
+                          <th>Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>Pending / New</td>
+                          <td>{analyticsStats.pending}</td>
+                        </tr>
+                        <tr>
+                          <td>Accepted / In Progress</td>
+                          <td>{analyticsStats.total - analyticsStats.pending - analyticsStats.completed}</td>
+                        </tr>
+                        <tr>
+                          <td>Completed</td>
+                          <td>{analyticsStats.completed}</td>
+                        </tr>
+                      </tbody>
+                    </Table>
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          </>
+        )}
+
+        {/* Booking notification details */}
+        <Modal
+          show={Boolean(selectedNotification)}
+          onHide={() => setSelectedNotification(null)}
+          centered
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>{selectedNotification?.subject || "Notification"}</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p className="mb-2">
+              <strong>Message:</strong>
+            </p>
+            <p style={{ whiteSpace: "pre-line" }}>{selectedNotification?.message || "No message provided."}</p>
+            <hr />
+            <p className="mb-1">
+              <strong>Channel:</strong> {selectedNotification?.channel || "In-App"}
+            </p>
+            <p className="mb-1">
+              <strong>Sent:</strong> {selectedNotification?.sentAt || "Just now"}
+            </p>
+            {selectedNotification?.providerEmail && (
+              <p className="mb-0">
+                <strong>Provider email:</strong> {selectedNotification.providerEmail}
+              </p>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setSelectedNotification(null)}>
+              Close
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
         {/* Keep your existing modals exactly as they are */}
         <Modal 
