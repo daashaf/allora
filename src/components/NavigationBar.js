@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { ReactComponent as InfinityLogo } from "../assets/infinity-logo.svg";
-import { auth, db } from "../firebase";
+import { auth, db, isBackgroundUserSession } from "../firebase";
 import "./NavigationBar.css";
 
 export default function NavigationBar({
@@ -154,11 +154,12 @@ export default function NavigationBar({
     if (!auth || !db) return undefined;
 
     const unsub = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      if (!user) {
+      if (!user || isBackgroundUserSession(user)) {
+        setCurrentUser(null);
         setCurrentRole(null);
         return;
       }
+      setCurrentUser(user);
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         const role = snap.exists() ? snap.data()?.role : null;
@@ -173,9 +174,9 @@ export default function NavigationBar({
   }, []);
 
   const pathname = location.pathname;
-  const isAgentView = pathname.startsWith("/agent-dashboard") || currentRole === "Customer Support";
-  const isAdminView = pathname.startsWith("/admin") || currentRole === "Administrator";
-  const isProviderView = pathname.startsWith("/provider") || currentRole === "Service Provider";
+  const isAgentView = pathname.startsWith("/agent-dashboard");
+  const isAdminView = pathname.startsWith("/admin");
+  const isProviderView = pathname.startsWith("/provider");
   const isMinimalNav = isAgentView || isAdminView || isProviderView;
 
   const minimalHeading = () => {

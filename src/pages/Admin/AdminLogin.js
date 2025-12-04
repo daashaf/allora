@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import "../Customer/Login.css";
 import { auth, db } from "../../firebase";
@@ -19,35 +19,23 @@ export default function AdminLogin() {
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
+  const adminBootstrapEmail = (process.env.REACT_APP_FIREBASE_SERVICE_EMAIL || "").toLowerCase();
+  const adminBootstrapPassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD || "";
 
   useEffect(() => {
-    if (!auth || !db) return undefined;
+    if (!auth) return undefined;
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
-      try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        const role = snap.exists()
-          ? snap.data()?.role || snap.data()?.Role || snap.data()?.userType
-          : null;
-        if (role === "Administrator") {
-          navigate("/admin/dashboard", { replace: true });
-        }
-      } catch (error) {
-        console.warn("[Auth] Failed to pre-check admin role", error);
+    let active = true;
+    signOut(auth).catch(() => {
+      if (active) {
+        setError("Unable to reset your session. Please try again before signing in.");
       }
     });
 
-    return () => unsubscribe();
-  }, [navigate]);
-
-  const getUserRole = async (uid) => {
-    if (!db) return null;
-    const snap = await getDoc(doc(db, "users", uid));
-    if (!snap.exists()) return null;
-    const data = snap.data();
-    return data.role || data.Role || data.userType || null;
-  };
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const upsertUserRole = async (uid, emailAddress, role) => {
     if (!db || !uid) return null;
@@ -79,23 +67,60 @@ export default function AdminLogin() {
 
     try {
       setSubmitting(true);
-      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const role = await getUserRole(credential.user.uid);
+      const emailAddress = email.trim().toLowerCase();
 
-      if (role === "Administrator") {
+      try {
+        const credential = await signInWithEmailAndPassword(auth, emailAddress, password);
+        if (db && credential?.user?.uid && allowedAdminEmails.includes(emailAddress)) {
+          await upsertUserRole(credential.user.uid, emailAddress, "Administrator");
+        }
         navigate("/admin/dashboard", { replace: true });
-      } else if (allowedAdminEmails.includes(email.trim().toLowerCase())) {
-        await upsertUserRole(credential.user.uid, email.trim(), "Administrator");
-        navigate("/admin/dashboard", { replace: true });
-      } else {
-        setError("This account is not authorized for administrator access.");
-        await signOut(auth);
+        return;
+      } catch (signInError) {
+        if (
+          signInError?.code === "auth/user-not-found" &&
+          allowedAdminEmails.includes(emailAddress)
+        ) {
+          // Bootstrap the admin account if it doesn't exist in Firebase Auth.
+          const bootstrap = await createUserWithEmailAndPassword(auth, emailAddress, password);
+          if (db && bootstrap?.user?.uid) {
+            await upsertUserRole(bootstrap.user.uid, emailAddress, "Administrator");
+          }
+          navigate("/admin/dashboard", { replace: true });
+          return;
+        }
+        if (
+          signInError?.code === "auth/invalid-credential" &&
+          allowedAdminEmails.includes(emailAddress) &&
+          adminBootstrapEmail === emailAddress &&
+          adminBootstrapPassword
+        ) {
+          // Try the configured bootstrap credentials in case the password changed.
+          const fallback = await signInWithEmailAndPassword(
+            auth,
+            adminBootstrapEmail,
+            adminBootstrapPassword
+          );
+          if (db && fallback?.user?.uid) {
+            await upsertUserRole(fallback.user.uid, emailAddress, "Administrator");
+          }
+          navigate("/admin/dashboard", { replace: true });
+          return;
+        }
+        throw signInError;
       }
     } catch (signInError) {
+      console.error("Admin login error:", signInError);
       if (signInError?.code === "auth/invalid-credential") {
         setError("Invalid administrator credentials.");
+      } else if (signInError?.code === "auth/user-not-found") {
+        setError("Admin account not found.");
+      } else if (signInError?.code === "auth/invalid-email") {
+        setError("Please enter a valid email address.");
+      } else if (signInError?.code === "auth/network-request-failed") {
+        setError("Network error. Check your connection and try again.");
       } else {
-        setError("Unable to sign in. Please try again.");
+        setError(`Unable to sign in: ${signInError.message || "Unknown error"}`);
       }
     } finally {
       setSubmitting(false);

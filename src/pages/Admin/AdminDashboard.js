@@ -17,6 +17,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import NavigationBar from "../../components/NavigationBar";
 import { COMMISSION_RATE, formatCurrency, getBookings, summarizeBookings } from "../../commission";
 import { getServiceProviders, updateServiceProvider } from "../../serviceProviderCRUD";
+import SendNotification from "../../components/SendNotification";
 import "./AdminDashboard.css";
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
@@ -213,6 +214,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
       return normalized.toLowerCase() === "pending";
     });
   }, [providerRegistrations]);
+  const syncedLegacyProvidersRef = useRef(false);
 
   useEffect(() => {
     if (!db) return undefined;
@@ -230,15 +232,97 @@ const getBadgeClass = (value, fallback = "unknown") => {
     });
   }, []);
 
-  // Service Provider registrations (local store)
+  // Service Provider registrations (Firestore-first, fallback to local store)
   const refreshProviderRegistrations = async () => {
     const list = await getServiceProviders();
     setProviderRegistrations(list);
   };
 
   useEffect(() => {
+    if (db) {
+      const unsub = onSnapshot(collection(db, "ServiceProvider"), (snapshot) => {
+        const docs = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          const { display: submittedAtDisplay, order: submittedOrder } = formatSnapshotTimestamp(
+            data.createdAt || data.submittedAt,
+            data.createdAt || data.submittedAt || ""
+          );
+          return {
+            id: docSnap.id,
+            providerId: data.providerId || data.providerID || data.id || docSnap.id,
+            businessName: data.businessName || data.provider || "Provider",
+            ownerName: data.ownerName || data.owner || "",
+            email: data.email || "",
+            phone: data.phone || "",
+            address: data.address || "",
+            category: data.category || "General",
+            status: data.status || "Pending",
+            userId: data.userId || data.uid || "",
+            submittedAt: submittedAtDisplay,
+            _order: submittedOrder || 0,
+          };
+        });
+        setProviderRegistrations(docs.sort((a, b) => (b._order || 0) - (a._order || 0)));
+      });
+      return () => unsub();
+    }
+
+    const refreshProviderRegistrations = async () => {
+      const list = await getServiceProviders();
+      setProviderRegistrations(list);
+    };
     refreshProviderRegistrations();
   }, []);
+
+  // One-time backfill of legacy/local provider registrations into Firestore so old requests appear.
+  useEffect(() => {
+    const syncLegacyProviders = async () => {
+      if (!db || syncedLegacyProvidersRef.current) return;
+      try {
+        const legacy = await getServiceProviders();
+        if (!Array.isArray(legacy) || legacy.length === 0) {
+          syncedLegacyProvidersRef.current = true;
+          return;
+        }
+        const existingEmails = new Set(
+          providerRegistrations
+            .map((p) => (p.email || "").toLowerCase())
+            .filter(Boolean)
+        );
+        const existingIds = new Set(providerRegistrations.map((p) => p.providerId || p.id));
+
+        const unsynced = legacy.filter((p) => {
+          const email = (p.email || "").toLowerCase();
+          return !existingEmails.has(email) && !existingIds.has(p.providerId || p.id);
+        });
+
+        if (unsynced.length === 0) {
+          syncedLegacyProvidersRef.current = true;
+          return;
+        }
+
+        const tasks = unsynced.map((p) =>
+          addDoc(collection(db, "ServiceProvider"), {
+            providerId: p.providerId || p.id || `SP-${Date.now()}`,
+            businessName: p.businessName || p.provider || "Provider",
+            ownerName: p.ownerName || "",
+            email: (p.email || "").toLowerCase(),
+            phone: p.phone || "",
+            address: p.address || "",
+            category: p.category || "General",
+            status: p.status || "Pending",
+            createdAt: serverTimestamp(),
+          }).catch((err) => console.warn("[Provider] Failed to backfill legacy provider", err))
+        );
+        await Promise.allSettled(tasks);
+      } catch (error) {
+        console.warn("[Provider] Legacy sync failed", error);
+      } finally {
+        syncedLegacyProvidersRef.current = true;
+      }
+    };
+    syncLegacyProviders();
+  }, [db, providerRegistrations]);
 
   // Deep link into dashboard panels (e.g., from nav bell)
   useEffect(() => {
@@ -323,6 +407,29 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   // Provider registration review (local store)
   const updateProviderStatus = async (id, status) => {
+    if (db) {
+      try {
+        await updateDoc(doc(db, "ServiceProvider", id), {
+          status,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.warn("[Provider] Failed to update provider status", error);
+      }
+      // Also update linked user, if present
+      const target = providerRegistrations.find((p) => p.id === id);
+      if (target?.userId) {
+        try {
+          await updateDoc(doc(db, "users", target.userId), {
+            status,
+            role: "Service Provider",
+          });
+        } catch (error) {
+          console.warn("[Provider] Failed to update linked user status", error);
+        }
+      }
+      return;
+    }
     await updateServiceProvider(id, { status });
     refreshProviderRegistrations();
   };
@@ -807,6 +914,8 @@ const getBadgeClass = (value, fallback = "unknown") => {
     const stored = localStorage.getItem("admin-notifications-last-seen");
     return stored ? Number(stored) : 0;
   });
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [selectedProviderEmail, setSelectedProviderEmail] = useState("");
   const bookingTotals = useMemo(() => summarizeBookings(bookings), [bookings]);
   const commissionRatePercent = Math.round((COMMISSION_RATE || 0) * 100);
 
@@ -844,9 +953,9 @@ const getBadgeClass = (value, fallback = "unknown") => {
       },
       {
         key: "commission",
-        label: "Commission",
+        label: "Admin Commission",
         value: formatCurrency(bookingTotals.adminTotal),
-        detail: `${commissionRatePercent}% platform fee`,
+        detail: `${commissionRatePercent}% from ${bookings.length} bookings`,
       },
       {
         key: "notifications",
@@ -1161,6 +1270,15 @@ const getBadgeClass = (value, fallback = "unknown") => {
                                     >
                                       Decline
                                     </button>
+                                    <button
+                                      className="action-btn"
+                                      onClick={() => {
+                                        setSelectedProviderEmail(p.email);
+                                        setShowNotificationModal(true);
+                                      }}
+                                    >
+                                      Message
+                                    </button>
                                   </td>
                                 </tr>
                               );
@@ -1183,7 +1301,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
                       </div>
                       <div className="commission-stats">
                         <div className="commission-stat-card">
-                          <p>Admin share</p>
+                          <p>Admin Commission Earned</p>
                           <strong>{formatCurrency(bookingTotals.adminTotal)}</strong>
                         </div>
                         <div className="commission-stat-card">
@@ -1896,6 +2014,11 @@ const getBadgeClass = (value, fallback = "unknown") => {
         )}
       </main>
       </div>
+      <SendNotification 
+        show={showNotificationModal}
+        onHide={() => setShowNotificationModal(false)}
+        providerEmail={selectedProviderEmail}
+      />
     </div>
   );
 }

@@ -195,9 +195,6 @@ export default function CustomerDashboard() {
               <button type="button" className="nav-cta">
                 New request
               </button>
-              <button type="button" className="ghost">
-                View timeline
-              </button>
             </div>
           </section>
 
