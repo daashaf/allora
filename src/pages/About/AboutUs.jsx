@@ -25,25 +25,6 @@ const values = [
   },
 ];
 
-const journey = [
-  {
-    year: "2019",
-    text: "A hallway notice board in Bengaluru becomes a digital concierge for neighbours.",
-  },
-  {
-    year: "2021",
-    text: "We onboard our first cohort of curated providers and launch live service timelines.",
-  },
-  {
-    year: "2023",
-    text: "Service Hub merges customer updates, pro tooling, and support escalation in one canvas.",
-  },
-  {
-    year: "2025",
-    text: "12 cities, 120+ categories, and 24/7 concierge coverage across India and New Zealand.",
-  },
-];
-
 const testimonials = [
   {
     quote: "We keep the thread human while software does the heavy lifting.",

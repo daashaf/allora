@@ -76,15 +76,25 @@ export default function NavigationBar({
 
   const handleNotificationsClick = () => {
     setIsNavCollapsed(true);
-    if (!isAdminView && !isAgentView) {
-      setShowNotificationList((open) => !open);
-    }
     if (typeof onNotificationsViewed === "function") {
       onNotificationsViewed();
     }
-    if (isAdminView || isAgentView) {
+    
+    const pathname = location.pathname;
+    const isProviderView = pathname.startsWith("/provider");
+    const isAdminView = pathname.startsWith("/admin");
+    const isAgentView = pathname.startsWith("/agent-dashboard");
+    
+    if (isProviderView) {
+      const onProviderDashboard = pathname.startsWith("/provider/dashboard");
+      if (onProviderDashboard) {
+        navigate("/provider/dashboard?tab=notifications");
+      }
+    } else if (!isAdminView && !isAgentView) {
+      setShowNotificationList((open) => !open);
+    } else if (isAdminView || isAgentView) {
       const targetSearch = "?target=notifications";
-      const onAdminDashboard = isAdminView && location.pathname.startsWith("/admin/dashboard");
+      const onAdminDashboard = isAdminView && pathname.startsWith("/admin/dashboard");
       if (onAdminDashboard) {
         const panel = document.getElementById("admin-notifications-panel");
         if (panel) {
@@ -130,13 +140,9 @@ export default function NavigationBar({
 
   const pathname = location.pathname;
 
-  const isAgentView = pathname.startsWith("/agent-dashboard") || currentRole === "Customer Support";
-  const isAdminView = pathname.startsWith("/admin") || currentRole === "Administrator";
-  // Only show the provider workspace nav when actually on provider routes, not on customer pages.
-
+  // Scope minimal nav to route context, not stored role, so customers with admin roles still see the customer nav.
   const isAgentView = pathname.startsWith("/agent-dashboard");
   const isAdminView = pathname.startsWith("/admin");
-
   const isProviderView = pathname.startsWith("/provider");
   const isMinimalNav = isAgentView || isAdminView || isProviderView;
 
@@ -274,96 +280,92 @@ export default function NavigationBar({
                   </div>
                 )}
                 <div className="nav-support-actions">
-                  {/* Bell/notifications hidden for provider view */}
-                  {!isProviderView && (
-                    <div className="nav-notification-wrapper">
-                      <button
-                        type="button"
-                        className="nav-icon-btn"
-                        aria-label="Notifications"
-                        title="Notifications"
-                        onClick={handleNotificationsClick}
+                  <div className="nav-notification-wrapper">
+                    <button
+                      type="button"
+                      className="nav-icon-btn"
+                      aria-label="Notifications"
+                      title="Notifications"
+                      onClick={handleNotificationsClick}
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
                       >
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          aria-hidden="true"
-                        >
-                          <path
-                            d="M12 4a6 6 0 00-6 6v3.382l-.723 1.447A1 1 0 006.173 17h11.654a1 1 0 00.896-1.471L18 13.382V10a6 6 0 00-6-6z"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <path
-                            d="M10 19a2 2 0 004 0"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        {notificationCount > 0 && (
-                          <span className="nav-icon-badge" aria-label={`${notificationCount} notifications`}>
-                            {notificationCount}
-                          </span>
-                        )}
-                      </button>
+                        <path
+                          d="M12 4a6 6 0 00-6 6v3.382l-.723 1.447A1 1 0 006.173 17h11.654a1 1 0 00.896-1.471L18 13.382V10a6 6 0 00-6-6z"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M10 19a2 2 0 004 0"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      {notificationCount > 0 && (
+                        <span className="nav-icon-badge" aria-label={`${notificationCount} notifications`}>
+                          {notificationCount}
+                        </span>
+                      )}
+                    </button>
                     {showNotificationList && recentNotifications.length > 0 && (
                       <div className="nav-notification-popover" style={notificationPopoverStyle}>
                         {recentNotifications.map((n) => (
-                            <div key={n.id} className="nav-notification-item">
-                              <p className="nav-notification-subject">{n.subject || "Notification"}</p>
-                              <p className="nav-notification-message">
-                                {n.message || n.audience || "New update available."}
-                              </p>
-                              <span className="nav-notification-meta">{n.sentAt || "Just now"}</span>
-                            </div>
-                          ))}
-                              <button
-                            type="button"
-                            className="nav-notification-viewall"
-                            onClick={() => {
-                              setShowNotificationList(false);
-                              if (typeof onNotificationsViewed === "function") {
-                                onNotificationsViewed();
-                              }
-                              if (isAdminView || isAgentView) {
-                                const targetSearch = "?target=notifications";
-                                const onAdminDashboard =
-                                  isAdminView && location.pathname.startsWith("/admin/dashboard");
-                                if (onAdminDashboard) {
-                                  const panel = document.getElementById("admin-notifications-panel");
-                                  if (panel) {
-                                    panel.scrollIntoView({ behavior: "smooth", block: "start" });
-                                  }
-                                  if (location.search !== targetSearch) {
-                                    navigate(`/admin/dashboard${targetSearch}`);
-                                  }
-                                } else {
+                          <div key={n.id} className="nav-notification-item">
+                            <p className="nav-notification-subject">{n.subject || "Notification"}</p>
+                            <p className="nav-notification-message">
+                              {n.message || n.audience || "New update available."}
+                            </p>
+                            <span className="nav-notification-meta">{n.sentAt || "Just now"}</span>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="nav-notification-viewall"
+                          onClick={() => {
+                            setShowNotificationList(false);
+                            if (typeof onNotificationsViewed === "function") {
+                              onNotificationsViewed();
+                            }
+                            if (isAdminView || isAgentView) {
+                              const targetSearch = "?target=notifications";
+                              const onAdminDashboard =
+                                isAdminView && location.pathname.startsWith("/admin/dashboard");
+                              if (onAdminDashboard) {
+                                const panel = document.getElementById("admin-notifications-panel");
+                                if (panel) {
+                                  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }
+                                if (location.search !== targetSearch) {
                                   navigate(`/admin/dashboard${targetSearch}`);
                                 }
+                              } else {
+                                navigate(`/admin/dashboard${targetSearch}`);
                               }
-                            }}
-                          >
-                            View all
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {/* Menu icon removed per request */}
+                            }
+                          }}
+                        >
+                          View all
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <button type="button" className="dashboard-nav-link nav-support-logout" onClick={handleLogout}>
                     Logout
                   </button>
                 </div>
               </div>
-                ) : (
-                  <>
+            ) : (
+              <>
                 {currentUser ? (
                   <button type="button" className="dashboard-nav-link" onClick={handleLogout}>
                     Logout

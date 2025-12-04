@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -126,7 +127,10 @@ const getBadgeClass = (value, fallback = "unknown") => {
 
   useEffect(() => {
     if (!db) return undefined;
-    return onSnapshot(collection(db, "users"), (snapshot) => {
+    const shouldLoad =
+      activeSection === "Dashboard" || activeSection === "User Management";
+    if (!shouldLoad) return undefined;
+    return onSnapshot(query(collection(db, "users"), limit(50)), (snapshot) => {
       setCustomers(
         snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
@@ -148,7 +152,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         })
       );
     });
-  }, []);
+  }, [db, activeSection]);
 
   const normalizeRole = (value) =>
     typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -204,22 +208,29 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [serviceView, setServiceView] = useState("Manage Services");
   const [providerRegistrations, setProviderRegistrations] = useState([]);
   const [activePanel, setActivePanel] = useState("notifications");
+  const [loadNonCritical, setLoadNonCritical] = useState(false);
   const handleDashboardPanelChange = (panelKey) => {
     setActiveSection("Dashboard");
     setActivePanel(panelKey);
     navigate(`/admin/dashboard?target=${panelKey}`);
   };
   const pendingProviders = useMemo(() => {
+    if (!loadNonCritical) return [];
     return providerRegistrations.filter((p) => {
       const normalized = getBadgeLabel(p.status || "Pending");
       return normalized.toLowerCase() === "pending";
     });
-  }, [providerRegistrations]);
+  }, [providerRegistrations, loadNonCritical]);
   const syncedLegacyProvidersRef = useRef(false);
 
   useEffect(() => {
-    if (!db) return undefined;
-    return onSnapshot(collection(db, SERVICE_COLLECTION), (snapshot) => {
+    const timer = setTimeout(() => setLoadNonCritical(true), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!db || !loadNonCritical) return undefined;
+    return onSnapshot(query(collection(db, SERVICE_COLLECTION), limit(100)), (snapshot) => {
       const docs = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
         const { display: submittedAtDisplay } = formatSnapshotTimestamp(
@@ -231,7 +242,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
       setServices(docs);
       setListings(docs);
     });
-  }, []);
+  }, [loadNonCritical]);
 
   // Service Provider registrations (Firestore-first, fallback to local store)
   const refreshProviderRegistrations = async () => {
@@ -240,43 +251,37 @@ const getBadgeClass = (value, fallback = "unknown") => {
   };
 
   useEffect(() => {
-    if (db) {
-      const unsub = onSnapshot(collection(db, "ServiceProvider"), (snapshot) => {
-        const docs = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          const { display: submittedAtDisplay, order: submittedOrder } = formatSnapshotTimestamp(
-            data.createdAt || data.submittedAt,
-            data.createdAt || data.submittedAt || ""
-          );
-          return {
-            id: docSnap.id,
-            providerId: data.providerId || data.providerID || data.id || docSnap.id,
-            businessName: data.businessName || data.provider || "Provider",
-            ownerName: data.ownerName || data.owner || "",
-            email: data.email || "",
-            phone: data.phone || "",
-            address: data.address || "",
-            category: data.category || "General",
-            status: data.status || "Pending",
-            userId: data.userId || data.uid || "",
-            submittedAt: submittedAtDisplay,
-            _order: submittedOrder || 0,
-          };
-        });
-        setProviderRegistrations(docs.sort((a, b) => (b._order || 0) - (a._order || 0)));
+    if (!db || !loadNonCritical) return undefined;
+    const unsub = onSnapshot(query(collection(db, "ServiceProvider"), limit(100)), (snapshot) => {
+      const docs = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const { display: submittedAtDisplay, order: submittedOrder } = formatSnapshotTimestamp(
+          data.createdAt || data.submittedAt,
+          data.createdAt || data.submittedAt || ""
+        );
+        return {
+          id: docSnap.id,
+          providerId: data.providerId || data.providerID || data.id || docSnap.id,
+          businessName: data.businessName || data.provider || "Provider",
+          ownerName: data.ownerName || data.owner || "",
+          email: data.email || "",
+          phone: data.phone || "",
+          address: data.address || "",
+          category: data.category || "General",
+          status: data.status || "Pending",
+          userId: data.userId || data.uid || "",
+          submittedAt: submittedAtDisplay,
+          _order: submittedOrder || 0,
+        };
       });
-      return () => unsub();
-    }
-
-    const refreshProviderRegistrations = async () => {
-      const list = await getServiceProviders();
-      setProviderRegistrations(list);
-    };
-    refreshProviderRegistrations();
-  }, []);
+      setProviderRegistrations(docs.sort((a, b) => (b._order || 0) - (a._order || 0)));
+    });
+    return () => unsub();
+  }, [loadNonCritical]);
 
   // One-time backfill of legacy/local provider registrations into Firestore so old requests appear.
   useEffect(() => {
+    if (!loadNonCritical) return;
     const syncLegacyProviders = async () => {
       if (!db || syncedLegacyProvidersRef.current) return;
       try {
@@ -323,7 +328,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
       }
     };
     syncLegacyProviders();
-  }, [db, providerRegistrations]);
+  }, [db, providerRegistrations, loadNonCritical]);
 
   // Deep link into dashboard panels (e.g., from nav bell)
   useEffect(() => {
@@ -613,8 +618,8 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    if (!db) return undefined;
-    return onSnapshot(collection(db, "Category"), (snapshot) => {
+    if (!db || !loadNonCritical) return undefined;
+    return onSnapshot(query(collection(db, "Category"), limit(100)), (snapshot) => {
       setCategories(
         snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
@@ -627,7 +632,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         })
       );
     });
-  }, []);
+  }, [db, loadNonCritical]);
 
   const addCategory = async () => {
     if (!db) return;
@@ -679,8 +684,8 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const syncedCategoriesRef = useRef(new Set());
 
   useEffect(() => {
-    if (!db) return undefined;
-    return onSnapshot(collection(db, SERVICE_CATEGORY_COLLECTION), (snapshot) => {
+    if (!db || !loadNonCritical) return undefined;
+    return onSnapshot(query(collection(db, SERVICE_CATEGORY_COLLECTION), limit(100)), (snapshot) => {
       setCategoryServices(
         snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
@@ -697,9 +702,10 @@ const getBadgeClass = (value, fallback = "unknown") => {
         })
       );
     });
-  }, []);
+  }, [db, loadNonCritical]);
 
   useEffect(() => {
+    if (!loadNonCritical) return;
     let mounted = true;
     getBookings()
       .then((list) => {
@@ -711,13 +717,12 @@ const getBadgeClass = (value, fallback = "unknown") => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [loadNonCritical]);
 
   useEffect(() => {
-    if (!db) return undefined;
+    if (!db || !loadNonCritical) return undefined;
     const syncMissingServices = async () => {
       if (!(await ensureAuth())) return;
-
       for (const category of categoryServices) {
         if (category.serviceDocId || syncedCategoriesRef.current.has(category.id)) continue;
 
@@ -767,7 +772,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
     };
 
     syncMissingServices();
-  }, [categoryServices, services]);
+  }, [categoryServices, services, loadNonCritical]);
 
   const addCategoryService = async () => {
     if (!db) return;
@@ -852,8 +857,8 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [issues, setIssues] = useState([]);
 
   useEffect(() => {
-    if (!db) return undefined;
-    const ticketsQuery = query(collection(db, "tickets"), orderBy("createdAt", "desc"));
+    if (!db || !loadNonCritical) return undefined;
+    const ticketsQuery = query(collection(db, "tickets"), orderBy("createdAt", "desc"), limit(50));
     return onSnapshot(ticketsQuery, (snapshot) => {
       const docs = snapshot.docs
         .map((docSnap) => {
@@ -876,11 +881,11 @@ const getBadgeClass = (value, fallback = "unknown") => {
         .map(({ _order, ...rest }) => rest);
       setIssues(docs);
     });
-  }, []);
+  }, [loadNonCritical]);
 
   const filteredIssues = useMemo(
-    () => issues.filter((i) => (issueFilter === "All" ? true : i.status === issueFilter)),
-    [issues, issueFilter]
+    () => loadNonCritical ? issues.filter((i) => (issueFilter === "All" ? true : i.status === issueFilter)) : [],
+    [issues, issueFilter, loadNonCritical]
   );
 
   const updateIssueStatus = async (id, status) => {
@@ -909,8 +914,8 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [roles, setRoles] = useState([]);
 
   useEffect(() => {
-    if (!db) return undefined;
-    return onSnapshot(collection(db, "Roles"), (snapshot) => {
+    if (!db || !loadNonCritical) return undefined;
+    return onSnapshot(query(collection(db, "Roles"), limit(50)), (snapshot) => {
       setRoles(
         snapshot.docs.map((docSnap) => {
           const data = docSnap.data();
@@ -923,7 +928,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         })
       );
     });
-  }, []);
+  }, [db, loadNonCritical]);
 
   const addRole = async () => {
     if (!db) return;
@@ -987,7 +992,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   });
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [selectedProviderEmail, setSelectedProviderEmail] = useState("");
-  const bookingTotals = useMemo(() => summarizeBookings(bookings), [bookings]);
+  const bookingTotals = useMemo(() => loadNonCritical ? summarizeBookings(bookings) : { adminTotal: 0, providerTotal: 0, totalVolume: 0 }, [bookings, loadNonCritical]);
   const commissionRatePercent = Math.round((COMMISSION_RATE || 0) * 100);
 
   const summaryCards = useMemo(() => {
@@ -1013,14 +1018,14 @@ const getBadgeClass = (value, fallback = "unknown") => {
       {
         key: "services",
         label: "Services",
-        value: services.length,
+        value: loadNonCritical ? services.length : 0,
         detail: `${pendingListings} awaiting review`,
       },
       {
         key: "tickets",
         label: "Open Tickets",
         value: openIssues,
-        detail: `${issues.length} total`,
+        detail: `${loadNonCritical ? issues.length : 0} total`,
       },
       {
         key: "commission",
@@ -1031,8 +1036,8 @@ const getBadgeClass = (value, fallback = "unknown") => {
       {
         key: "notifications",
         label: "Notifications Sent",
-        value: notifications.length,
-        detail: `${roles.length} roles configured`,
+        value: loadNonCritical ? notifications.length : 0,
+        detail: `${loadNonCritical ? roles.length : 0} roles configured`,
       },
     ];
   }, [
@@ -1044,22 +1049,24 @@ const getBadgeClass = (value, fallback = "unknown") => {
     roles,
     bookingTotals,
     commissionRatePercent,
+    loadNonCritical,
   ]);
 
-  const recentNotifications = useMemo(() => notifications.slice(0, 3), [notifications]);
+  const recentNotifications = useMemo(() => loadNonCritical ? notifications.slice(0, 3) : [], [notifications, loadNonCritical]);
   const recentIssues = useMemo(() => issues.slice(0, 3), [issues]);
-  const recentServices = useMemo(() => services.slice(0, 3), [services]);
+  const recentServices = useMemo(() => loadNonCritical ? services.slice(0, 3) : [], [services, loadNonCritical]);
   const providerNotifications = useMemo(() => {
+    if (!loadNonCritical) return [];
     const targeted = notifications.filter((n) => {
       const audience = (n.audience || "").toLowerCase();
       return audience.includes("provider");
     });
     return targeted.length ? targeted : notifications;
-  }, [notifications]);
+  }, [notifications, loadNonCritical]);
 
   useEffect(() => {
-    if (!db) return undefined;
-    return onSnapshot(collection(db, "Notification"), (snapshot) => {
+    if (!db || !loadNonCritical) return undefined;
+    return onSnapshot(query(collection(db, "Notification"), limit(50)), (snapshot) => {
       const docs = snapshot.docs
         .map((docSnap) => {
           const data = docSnap.data();
@@ -1078,7 +1085,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         .sort((a, b) => b.sentOrder - a.sentOrder);
       setNotifications(docs);
     });
-  }, []);
+  }, [db, loadNonCritical]);
 
   const sendNotification = async () => {
     const subject = compose.subject.trim();
@@ -1142,18 +1149,19 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [settings, setSettings] = useState(defaultSettings);
 
   useEffect(() => {
-    if (!db) return undefined;
+    if (!db || !loadNonCritical) return undefined;
     const settingsRef = doc(db, "Admin", "siteSettings");
     return onSnapshot(settingsRef, (snapshot) => {
       if (snapshot.exists()) {
         setSettings({ ...defaultSettings, ...snapshot.data() });
       }
     });
-  }, []);
+  }, [loadNonCritical]);
 
   const unreadNotificationCount = useMemo(() => {
+    if (!loadNonCritical) return 0;
     return notifications.filter((n) => (n.sentOrder || 0) > lastSeenNotifications).length;
-  }, [notifications, lastSeenNotifications]);
+  }, [notifications, lastSeenNotifications, loadNonCritical]);
 
   const markNotificationsSeen = () => {
     const now = Date.now();

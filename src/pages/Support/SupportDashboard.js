@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut, onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import {
     collection,
     getDocs,
@@ -10,11 +10,10 @@ import {
     onSnapshot,
     query,
     where,
-    orderBy,
     serverTimestamp,
 } from "firebase/firestore";
 
-import { app, isBackgroundUserSession } from "../../firebase";
+import { isBackgroundUserSession } from "../../firebase";
 
 import NavigationBar from "../../components/NavigationBar";
 import { auth, db } from "../../firebase";
@@ -48,13 +47,13 @@ function SupportDashboard() {
     // States
     const [successMessage, setSuccessMessage] = useState("");
 
-    const [showLogout, setShowLogout] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const [showTickets, setShowTickets] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [feedbackTicket, setFeedbackTicket] = useState(null);
     const [headerUserEmail, setHeaderUserEmail] = useState("");
     const [openTopicId, setOpenTopicId] = useState(null);
+    const [openFaqByTopic, setOpenFaqByTopic] = useState({});
 
 
 
@@ -177,7 +176,7 @@ function SupportDashboard() {
         );
 
         return unsubscribe;
-    }, [db, authUser?.uid, authUser?.email]);
+    }, [authUser?.uid, authUser?.email]);
 
     //  FETCH NOTIFICATIONS (one-time) 
     useEffect(() => {
@@ -220,13 +219,6 @@ function SupportDashboard() {
         };
         fetchTopics();
     }, []);
-
-    //  LOGOUT 
-    const handleLogout = () => {
-        signOut(auth)
-            .then(() => navigate("/"))
-            .catch((error) => console.error("Logout error:", error));
-    };
 
     //  CLEAR NOTIFICATIONS 
     const clearNotifications = () => setNotifications([]);
@@ -306,10 +298,14 @@ function SupportDashboard() {
     useEffect(() => {
         // Reset open state if topics change
         setOpenTopicId(null);
+        setOpenFaqByTopic({});
     }, [supportTopics]);
 
-    const toggleTopic = (key) => {
-        setOpenTopicId((prev) => (prev === key ? null : key));
+    const toggleFaq = (topicKey, faqKey) => {
+        setOpenFaqByTopic((prev) => ({
+            ...prev,
+            [topicKey]: prev[topicKey] === faqKey ? null : faqKey,
+        }));
     };
 
     //  FORMAT DATE FUNCTION 
@@ -348,7 +344,6 @@ function SupportDashboard() {
                             if (!requireCustomerLogin()) return;
                             setShowTickets((prev) => !prev);
                             setShowNotifications(false);
-                            setShowLogout(false);
                         }}
                     ></i>
 
@@ -357,12 +352,11 @@ function SupportDashboard() {
                         <i
                             className="bi bi-bell header-icon"
                             title="Notifications"
-                            onClick={() => {
-                                setShowNotifications(!showNotifications);
-                                setShowTickets(false);
-                                setShowLogout(false);
-                            }}
-                        ></i>
+                        onClick={() => {
+                            setShowNotifications(!showNotifications);
+                            setShowTickets(false);
+                        }}
+                    ></i>
                         {notifications.length > 0 && (
                             <span className="notification-badge">{notifications.length}</span>
                         )}
@@ -431,42 +425,56 @@ function SupportDashboard() {
                     )
                 ) : supportTopics.length ? (
                     <div className="support-grid support-card-grid">
-                        {supportTopics.map((topic, index) => (
-                            <div
-                                key={topic.id || index}
-                                className="support-card faq-card"
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => toggleTopic(topic.id || index)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                        e.preventDefault();
-                                        toggleTopic(topic.id || index);
-                                    }
-                                }}
-                                aria-expanded={openTopicId === (topic.id || index)}
-                            >
-                                <div className="faq-card-header">
-                                    <div>
-                                        <h3>{topic.title}</h3>
-                                        <p className="support-card-desc">{topic.desc}</p>
+                        {supportTopics.map((topic, index) => {
+                            const topicKey = String(topic.id ?? index);
+
+                            return (
+                                <div
+                                    key={topicKey}
+                                    className="support-card faq-card"
+                                >
+                                    <div className="faq-card-header">
+                                        <div>
+                                            <h3>{topic.title}</h3>
+                                            <p className="support-card-desc">{topic.desc}</p>
+                                        </div>
                                     </div>
-                                </div>
-                                {openTopicId === (topic.id || index) && (
                                     <div className="support-card-faqs">
-                                        {(topic.faqs || []).map((faq, i) => (
-                                            <div key={i} className="faq-row card-row">
-                                                <p className="faq-q">{faq.Q || faq.q}</p>
-                                                <p className="faq-a">{faq.A || faq.a}</p>
-                                            </div>
-                                        ))}
+                                        {(topic.faqs || []).map((faq, i) => {
+                                            const faqKey = `${topicKey}-${faq.id ?? faq.Q ?? faq.q ?? i}`;
+                                            const isFaqOpen = openFaqByTopic[topicKey] === faqKey;
+                                            return (
+                                                <div
+                                                    key={faqKey}
+                                                    className={`faq-row card-row${isFaqOpen ? " open" : ""}`}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="faq-row-trigger"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleFaq(topicKey, faqKey);
+                                                        }}
+                                                        aria-expanded={isFaqOpen}
+                                                    >
+                                                        <span className="faq-q">{faq.Q || faq.q}</span>
+                                                        <span className="faq-row-icon" aria-hidden="true">
+                                                            {isFaqOpen ? "-" : "+"}
+                                                        </span>
+                                                    </button>
+                                                    <div className="faq-row-panel" hidden={!isFaqOpen}>
+                                                        <p className="faq-a">{faq.A || faq.a}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                         {(!topic.faqs || topic.faqs.length === 0) && (
                                             <p className="support-card-empty">No FAQs yet for this topic.</p>
                                         )}
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                </div>
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="support-empty-state">

@@ -1,11 +1,5 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInAnonymously,
-  signInWithEmailAndPassword,
-  signOut,
-} from "firebase/auth";
+import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { getFirestore, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 
 const envConfig = {
@@ -17,7 +11,6 @@ const envConfig = {
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
 };
 
-// Fallbacks keep local development working even if .env is missing.
 const fallbackConfig = {
   apiKey: "AIzaSyA1gGqKyv1Lo_wH5SNsVqPB92SW1GgGPa8",
   authDomain: "allora-serice-hub.firebaseapp.com",
@@ -39,7 +32,6 @@ const appInstance =
   missingKeys.length > 0 ? null : getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 if (missingKeys.length > 0) {
-  // eslint-disable-next-line no-console
   console.warn(
     `[Firebase] Authentication is disabled because these values are missing: ${missingKeys.join(
       ", "
@@ -51,12 +43,6 @@ export const isFirebaseConfigured = Boolean(appInstance);
 export const app = appInstance;
 export const auth = appInstance ? getAuth(appInstance) : null;
 export const db = appInstance ? getFirestore(appInstance) : null;
-
-const serviceEmail = (process.env.REACT_APP_FIREBASE_SERVICE_EMAIL || "").toLowerCase();
-const servicePassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD || "";
-const enableServiceAutoLogin =
-  (process.env.REACT_APP_ENABLE_SERVICE_AUTO_LOGIN || "").toLowerCase() === "true";
-const canUseServiceCredentials = Boolean(serviceEmail && servicePassword && enableServiceAutoLogin);
 
 export const ensureUserRole = async (uid, email) => {
   if (!db || !uid) return null;
@@ -82,12 +68,6 @@ export const ensureUserRole = async (uid, email) => {
   return "Customer";
 };
 
-
-const serviceEmail = process.env.REACT_APP_FIREBASE_SERVICE_EMAIL;
-const servicePassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD;
-const enableServiceLogin = (process.env.REACT_APP_ENABLE_SERVICE_LOGIN || "").toLowerCase() === "true";
-
-
 const fallbackUser = { uid: "unauthenticated-client", isAnonymous: true, fromFallback: true };
 
 let resolveAuthReady = null;
@@ -96,27 +76,6 @@ export const authReady = appInstance
       resolveAuthReady = resolve;
     })
   : Promise.resolve(fallbackUser);
-
-const tryServiceCredentials = async () => {
-
-  if (!enableServiceLogin || !auth || !serviceEmail || !servicePassword) return false;
-
-  if (!auth || !canUseServiceCredentials) return false;
-
-  try {
-    await signInWithEmailAndPassword(auth, serviceEmail, servicePassword);
-    // eslint-disable-next-line no-console
-    console.info("[Firebase] Signed in with service credentials.");
-    return true;
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      "[Firebase] Service credential login failed. Verify REACT_APP_FIREBASE_SERVICE_EMAIL/REACT_APP_FIREBASE_SERVICE_PASSWORD or reset the password.",
-      error
-    );
-    return false;
-  }
-};
 
 if (auth) {
   const resolveReady = (user) => {
@@ -132,17 +91,14 @@ if (auth) {
       unsubscribe();
       return;
     }
-    const loggedIn = await tryServiceCredentials();
-    if (loggedIn) return;
     signInAnonymously(auth)
       .then((cred) => {
         resolveReady(cred.user);
         unsubscribe();
       })
       .catch((error) => {
-        // eslint-disable-next-line no-console
         console.warn(
-          "[Firebase] Anonymous authentication failed. Enable anonymous sign-in or provide credentials. Proceeding without auth (Firestore rules must allow this).",
+          "[Firebase] Anonymous authentication failed. Enable anonymous sign-in or provide credentials.",
           error
         );
         resolveReady(fallbackUser);
@@ -154,17 +110,14 @@ if (auth) {
 let warnedUnauthenticated = false;
 export const isBackgroundUserSession = (user) => {
   if (!user) return false;
-  const email = user.email?.toLowerCase?.();
-  const isServiceAutoUser = canUseServiceCredentials && serviceEmail && email === serviceEmail;
-  return Boolean(user.isAnonymous || user.fromFallback || isServiceAutoUser);
+  return Boolean(user.isAnonymous || user.fromFallback);
 };
 
 export const ensureFirebaseAuth = async () => {
   const user = await authReady;
   if (user?.fromFallback && !warnedUnauthenticated) {
-    // eslint-disable-next-line no-console
     console.warn(
-      "[Firebase] No authenticated user is available. Firestore writes will only work if your rules allow unauthenticated access or if you enable email/password or anonymous auth."
+      "[Firebase] No authenticated user is available. Firestore writes will only work if your rules allow unauthenticated access."
     );
     warnedUnauthenticated = true;
   }

@@ -14,27 +14,16 @@ export default function AdminLogin() {
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const allowedAdminEmails = (
-    process.env.REACT_APP_ADMIN_EMAILS || process.env.REACT_APP_ADMIN_EMAIL || ""
+    process.env.REACT_APP_ADMIN_EMAILS || ""
   )
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  const adminBootstrapEmail = (process.env.REACT_APP_FIREBASE_SERVICE_EMAIL || "").toLowerCase();
-  const adminBootstrapPassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD || "";
 
   useEffect(() => {
     if (!auth) return undefined;
-
-    let active = true;
-    signOut(auth).catch(() => {
-      if (active) {
-        setError("Unable to reset your session. Please try again before signing in.");
-      }
-    });
-
-    return () => {
-      active = false;
-    };
+    signOut(auth).catch(() => {});
+    return () => {};
   }, []);
 
   const upsertUserRole = async (uid, emailAddress, role) => {
@@ -56,7 +45,7 @@ export default function AdminLogin() {
     setError("");
 
     if (!auth) {
-      setError("Firebase is not configured. Add your keys to .env to enable admin login.");
+      setError("Firebase is not configured.");
       return;
     }
 
@@ -69,58 +58,40 @@ export default function AdminLogin() {
       setSubmitting(true);
       const emailAddress = email.trim().toLowerCase();
 
+      if (!allowedAdminEmails.includes(emailAddress)) {
+        setError("This email is not authorized as an admin.");
+        return;
+      }
+
       try {
         const credential = await signInWithEmailAndPassword(auth, emailAddress, password);
-        if (db && credential?.user?.uid && allowedAdminEmails.includes(emailAddress)) {
+        if (db && credential?.user?.uid) {
           await upsertUserRole(credential.user.uid, emailAddress, "Administrator");
         }
         navigate("/admin/dashboard", { replace: true });
-        return;
       } catch (signInError) {
-        if (
-          signInError?.code === "auth/user-not-found" &&
-          allowedAdminEmails.includes(emailAddress)
-        ) {
-          // Bootstrap the admin account if it doesn't exist in Firebase Auth.
+        if (signInError?.code === "auth/user-not-found") {
           const bootstrap = await createUserWithEmailAndPassword(auth, emailAddress, password);
           if (db && bootstrap?.user?.uid) {
             await upsertUserRole(bootstrap.user.uid, emailAddress, "Administrator");
           }
           navigate("/admin/dashboard", { replace: true });
-          return;
+        } else {
+          throw signInError;
         }
-        if (
-          signInError?.code === "auth/invalid-credential" &&
-          allowedAdminEmails.includes(emailAddress) &&
-          adminBootstrapEmail === emailAddress &&
-          adminBootstrapPassword
-        ) {
-          // Try the configured bootstrap credentials in case the password changed.
-          const fallback = await signInWithEmailAndPassword(
-            auth,
-            adminBootstrapEmail,
-            adminBootstrapPassword
-          );
-          if (db && fallback?.user?.uid) {
-            await upsertUserRole(fallback.user.uid, emailAddress, "Administrator");
-          }
-          navigate("/admin/dashboard", { replace: true });
-          return;
-        }
-        throw signInError;
       }
     } catch (signInError) {
       console.error("Admin login error:", signInError);
       if (signInError?.code === "auth/invalid-credential") {
-        setError("Invalid administrator credentials.");
+        setError("Invalid credentials.");
       } else if (signInError?.code === "auth/user-not-found") {
         setError("Admin account not found.");
       } else if (signInError?.code === "auth/invalid-email") {
         setError("Please enter a valid email address.");
       } else if (signInError?.code === "auth/network-request-failed") {
-        setError("Network error. Check your connection and try again.");
+        setError("Network error. Check your connection.");
       } else {
-        setError(`Unable to sign in: ${signInError.message || "Unknown error"}`);
+        setError(`Error: ${signInError.message || "Unknown error"}`);
       }
     } finally {
       setSubmitting(false);
@@ -194,16 +165,6 @@ export default function AdminLogin() {
                   {error}
                 </p>
               )}
-
-              <div className="row-between">
-                <button
-                  type="button"
-                  className="link"
-                  onClick={() => navigate("/admin/forgot-password")}
-                >
-                  Forgot Password?
-                </button>
-              </div>
 
               <button type="submit" className="btn" disabled={submitting}>
                 {submitting ? "Signing in..." : "Login"}

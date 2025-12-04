@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { collection, doc, getDocs, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import NavigationBar from "../../components/NavigationBar";
@@ -7,13 +6,8 @@ import "./SupportDashboard.css";
 import "./AgentDashboard.css";
 
 export default function AgentDashboard() {
-  const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
   const [expandedTicket, setExpandedTicket] = useState(null);
-  const [showLogout, setShowLogout] = useState(false);
-  const [profilePic, setProfilePic] = useState(
-    localStorage.getItem("agentPhoto") || "https://via.placeholder.com/40"
-  );
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -27,9 +21,7 @@ export default function AgentDashboard() {
       }
     };
     fetchTickets();
-  }, [db]);
-
-  const handleLogout = () => navigate("/agent-login");
+  }, []);
 
   const handleStatusChange = async (id, newStatus) => {
     try {
@@ -47,18 +39,6 @@ export default function AgentDashboard() {
       await updateDoc(ticketRef, updateData);
     } catch (err) {
       console.error("Error updating ticket:", err);
-    }
-  };
-
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfilePic(reader.result);
-        localStorage.setItem("agentPhoto", reader.result);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
