@@ -221,11 +221,13 @@ export default function ServiceProviderDashboard() {
             const matchesProviderId = providerIdLower && noteProviderId === providerIdLower;
             const isProviderAudience =
               audience.includes("provider") || audience.includes("service provider");
-            // Only surface notifications meant for this provider or provider-wide broadcasts.
+            const isTargeted = Boolean(noteProviderEmail || noteProviderId);
+            const matchesRecipient = !isTargeted || matchesEmail || matchesProviderId;
+            // Only surface notifications meant for providers; show broadcasts or those targeted to this provider.
             return (
               matchesChannel &&
               isProviderAudience &&
-              (matchesEmail || matchesProviderId)
+              matchesRecipient
             );
           })
           .sort((a, b) => b.sentOrder - a.sentOrder);

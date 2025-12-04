@@ -124,9 +124,6 @@ export default function CustomerDashboard() {
       if (currentUser?.uid) {
         return query(collection(db, "tickets"), where("userId", "==", currentUser.uid));
       }
-      if (currentUser?.email) {
-        return query(collection(db, "tickets"), where("userEmail", "==", currentUser.email));
-      }
       return null;
     };
     const q = buildQuery();
@@ -135,7 +132,9 @@ export default function CustomerDashboard() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const docs = snapshot.docs.map((docSnap) => docSnap.data() || {});
+        const docs = snapshot.docs
+          .map((docSnap) => docSnap.data() || {})
+          .filter((t) => !currentUser?.uid || t.userId === currentUser.uid);
         const total = docs.length;
         const open = docs.filter((t) => {
           const status = (t.status || "").toString().toLowerCase();
@@ -170,6 +169,12 @@ export default function CustomerDashboard() {
       alert("Please fill in both subject and message.");
       return;
     }
+
+    if (!currentUser?.uid || !currentUser?.email) {
+      alert("Please log in to create a support ticket.");
+      setShowTicketForm(false);
+      return;
+    }
     
     setTicketSubmitting(true);
     try {
@@ -178,9 +183,9 @@ export default function CustomerDashboard() {
         message: ticketForm.message.trim(),
         priority: ticketForm.priority,
         status: "Open",
-        userId: currentUser?.uid || "",
-        userEmail: currentUser?.email || "",
-        customer: currentUser?.email || "Customer",
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
+        customer: currentUser.email,
         createdAt: serverTimestamp(),
       });
       

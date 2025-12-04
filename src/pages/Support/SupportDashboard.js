@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import {
     collection,
     getDocs,
@@ -17,29 +17,6 @@ import NavigationBar from "../../components/NavigationBar";
 import { auth, db } from "../../firebase";
 import "./SupportDashboard.css";
 
-const getTicketStoreKey = (ownerKey = "guest") => `allora_support_tickets_${ownerKey}`;
-
-const readTicketsLocal = (ownerKey = "guest") => {
-    const key = getTicketStoreKey(ownerKey);
-    try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-    } catch {
-        return [];
-    }
-};
-
-const writeTicketsLocal = (list, ownerKey = "guest") => {
-    const key = getTicketStoreKey(ownerKey);
-    try {
-        localStorage.setItem(key, JSON.stringify(list));
-    } catch {
-        // ignore
-    }
-};
-
 const FALLBACK_SUPPORT_TOPICS = [
     {
         id: "basics",
@@ -47,7 +24,7 @@ const FALLBACK_SUPPORT_TOPICS = [
         desc: "Create an account, post your first request, and understand approvals.",
         faqs: [
             { Q: "How do I create a ticket?", A: "Click '+ Create Ticket' above, fill in subject and description, then submit." },
-            { Q: "Do I need to be logged in?", A: "Logging in links tickets to your email. Guest tickets work, but updates arrive via email only." },
+            { Q: "Do I need to be logged in?", A: "Yes—tickets require a logged-in customer so updates stay tied to your account." },
         ],
     },
     {
@@ -81,8 +58,11 @@ function SupportDashboard() {
     // Real Data States
     const [notifications, setNotifications] = useState([]);
     const [tickets, setTickets] = useState([]);
+    const [ticketsLoading, setTicketsLoading] = useState(true);
     const [supportTopics, setSupportTopics] = useState(FALLBACK_SUPPORT_TOPICS);
     const [userInfo, setUserInfo] = useState({ name: "", email: "", phone: "" });
+    const [authUser, setAuthUser] = useState(null);
+    const createTicketRef = useRef(null);
 
     // New ticket form
     const [newTicket, setNewTicket] = useState({
@@ -92,17 +72,23 @@ function SupportDashboard() {
     });
     const [showCreateTicket, setShowCreateTicket] = useState(false);
 
-    //  FETCH LOGGED-IN USER INFO 
+    // Track auth state and fetch user profile
+    useEffect(() => {
+        const unsubAuth = onAuthStateChanged(auth, (user) => {
+            setAuthUser(user);
+            setHeaderUserEmail(user?.email || "");
+            setTicketsLoading(true);
+        });
+
+        return () => unsubAuth();
+    }, []);
+
     useEffect(() => {
         const fetchUserData = async () => {
-            const currentUser = auth.currentUser;
-            if (currentUser?.email) {
-                setHeaderUserEmail(currentUser.email);
-            }
-            if (!currentUser) return;
+            if (!authUser?.uid) return;
 
             try {
-                const userRef = doc(db, "users", currentUser.uid);
+                const userRef = doc(db, "users", authUser.uid);
                 const userSnap = await getDoc(userRef);
 
                 if (userSnap.exists()) {
@@ -112,7 +98,7 @@ function SupportDashboard() {
                     const allUsers = await getDocs(collection(db, "users"));
                     allUsers.forEach((u) => {
                         const data = u.data();
-                        if (data.email === currentUser.email) {
+                        if (data.email === authUser.email) {
                             setUserInfo(data);
                         }
                     });
@@ -123,51 +109,61 @@ function SupportDashboard() {
         };
 
         fetchUserData();
-    }, []);
+    }, [authUser]);
+
+    useEffect(() => {
+        if (showCreateTicket && createTicketRef.current) {
+            createTicketRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    }, [showCreateTicket]);
 
     //  FETCH TICKETS (REAL-TIME) 
     useEffect(() => {
-        const ownerKey = auth?.currentUser?.email?.toLowerCase() || "guest";
-        const fallbackTickets = readTicketsLocal(ownerKey);
-        if (!db) {
-            setTickets(fallbackTickets);
+        const ownerId = authUser?.uid || null;
+        const ownerEmail = authUser?.email?.toLowerCase() || null;
+        if (!ownerId || !db) {
+            setTickets([]);
+            setTicketsLoading(false);
             return undefined;
         }
 
-        if (ownerKey === "guest") {
-            setTickets(fallbackTickets);
-            return undefined;
-        }
-
-        const ticketsQuery = query(
-            collection(db, "tickets"),
-            where("userEmail", "==", ownerKey),
-            orderBy("createdAt", "desc")
-        );
+        const ticketsQuery = query(collection(db, "tickets"), where("userId", "==", ownerId));
 
         const unsubscribe = onSnapshot(
             ticketsQuery,
             (snap) => {
-                const data = snap.docs.map((docSnap) => {
-                    const item = docSnap.data();
-                    const createdAt = item.createdAt?.toDate ? item.createdAt.toDate() : item.createdAt;
-                    return {
-                        id: docSnap.id,
-                        ...item,
-                        createdAt,
-                    };
-                });
+                const data = snap.docs
+                    .map((docSnap) => {
+                        const item = docSnap.data();
+                        const createdAt = item.createdAt?.toDate ? item.createdAt.toDate() : item.createdAt;
+                        return {
+                            id: docSnap.id,
+                            ...item,
+                            createdAt,
+                        };
+                    })
+                    .filter((item) => {
+                        const ticketUserId = item.userId;
+                        const ticketEmail = (item.userEmail || "").toLowerCase();
+                        return ticketUserId === ownerId || (!!ownerEmail && ticketEmail === ownerEmail);
+                    })
+                    .sort((a, b) => {
+                        const aTime = a.createdAt?.getTime ? a.createdAt.getTime() : 0;
+                        const bTime = b.createdAt?.getTime ? b.createdAt.getTime() : 0;
+                        return bTime - aTime;
+                    });
                 setTickets(data);
-                writeTicketsLocal(data, ownerKey);
+                setTicketsLoading(false);
             },
             (error) => {
                 console.error("[SupportDashboard] Error fetching tickets:", error);
-                setTickets(fallbackTickets);
+                setTickets([]);
+                setTicketsLoading(false);
             }
         );
 
         return unsubscribe;
-    }, []);
+    }, [db, authUser?.uid, authUser?.email]);
 
     //  FETCH NOTIFICATIONS (one-time) 
     useEffect(() => {
@@ -236,43 +232,41 @@ function SupportDashboard() {
 
         console.log("Creating ticket with:", { auth: !!auth, db: !!db, currentUser: auth?.currentUser });
 
-        const currentUser = auth?.currentUser;
-        const ownerKey = currentUser?.email?.toLowerCase() || "guest";
+        const currentUser = authUser;
+        if (!currentUser || !currentUser.email) {
+            alert("Please log in to create a support ticket.");
+            navigate("/login");
+            return;
+        }
+
+        const ownerKey = currentUser.email.toLowerCase();
         const ticketData = {
             subject: newTicket.subject.trim(),
             description: newTicket.description.trim(),
             status: newTicket.status,
             createdAt: serverTimestamp(),
-            userId: currentUser?.uid || "guest",
-            userName: userInfo.name || currentUser?.displayName || "Guest User",
-            userEmail: (userInfo.email || currentUser?.email || "guest@example.com").toLowerCase(),
+            userId: currentUser.uid,
+            userName: userInfo.name || currentUser.displayName || ownerKey,
+            userEmail: (userInfo.email || currentUser.email).toLowerCase(),
             userPhone: userInfo.phone || "Not provided",
         };
 
         console.log("Ticket data:", ticketData);
 
         try {
-            await addDoc(collection(db, "tickets"), ticketData);
+            const docRef = await addDoc(collection(db, "tickets"), ticketData);
+            // Optimistically show the new ticket for the current user
+            setTickets((prev) => [
+                { id: docRef.id, ...ticketData, createdAt: new Date() },
+                ...prev,
+            ]);
             setNewTicket({ subject: "", description: "", status: "Open" });
             setShowCreateTicket(false);
             setSuccessMessage("Ticket created successfully!");
             setTimeout(() => setSuccessMessage(""), 3000);
         } catch (error) {
             console.error("Failed to create ticket:", error);
-            // Fallback to local storage so the user still sees their ticket.
-            const localTicket = {
-                ...ticketData,
-                id: `local-${Date.now()}`,
-                createdAt: new Date(),
-            };
-            setTickets((prev) => {
-                const updated = [localTicket, ...prev];
-                writeTicketsLocal(updated, ownerKey);
-                return updated;
-            });
-            setNewTicket({ subject: "", description: "", status: "Open" });
-            setShowCreateTicket(false);
-            setSuccessMessage("Ticket saved locally. It will sync when Firestore is available.");
+            setSuccessMessage("Ticket could not be created. Please try again once you're online.");
             setTimeout(() => setSuccessMessage(""), 4000);
         }
     };
@@ -487,7 +481,40 @@ function SupportDashboard() {
                 </div>
 
                 <div className="tickets-body">
-                    {tickets.length > 0 ? (
+                    {showCreateTicket && (
+                        <div className="create-ticket-form" ref={createTicketRef}>
+                            <h5>Create New Ticket</h5>
+                            <form onSubmit={handleCreateTicket}>
+                                <input
+                                    type="text"
+                                    placeholder="Enter ticket subject..."
+                                    value={newTicket.subject}
+                                    onChange={(e) =>
+                                        setNewTicket({ ...newTicket, subject: e.target.value })
+                                    }
+                                    className="input-box"
+                                    required
+                                />
+                                <textarea
+                                    placeholder="Enter ticket description..."
+                                    value={newTicket.description}
+                                    onChange={(e) =>
+                                        setNewTicket({ ...newTicket, description: e.target.value })
+                                    }
+                                    className="input-box"
+                                    rows={3}
+                                    required
+                                ></textarea>
+                                <button type="submit" className="create-btn">
+                                    Submit
+                                </button>
+                            </form>
+                        </div>
+                    )}
+
+                    {ticketsLoading ? (
+                        <p>Loading tickets...</p>
+                    ) : tickets.length > 0 ? (
                         <table className="tickets-table">
                             <thead>
                                 <tr>
@@ -510,16 +537,12 @@ function SupportDashboard() {
                                         <td>{t.status || "FAQ"}</td>
                                         <td>{formatDate(t.createdAt)}</td>
                                         <td>
-                                            {t.status === "Resolved" ? (
-                                                <button
-                                                    className="feedback-btn"
-                                                    onClick={() => setFeedbackTicket(t)}
-                                                >
-                                                    Give Feedback
-                                                </button>
-                                            ) : (
-                                                "-"
-                                            )}
+                                            <button
+                                                className="feedback-btn"
+                                                onClick={() => setFeedbackTicket(t)}
+                                            >
+                                                Give Feedback
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -529,37 +552,6 @@ function SupportDashboard() {
                         <p>No tickets found.</p>
                     )}
                 </div>
-
-                {showCreateTicket && (
-                    <div className="create-ticket-form">
-                        <h5>Create New Ticket</h5>
-                        <form onSubmit={handleCreateTicket}>
-                            <input
-                                type="text"
-                                placeholder="Enter ticket subject..."
-                                value={newTicket.subject}
-                                onChange={(e) =>
-                                    setNewTicket({ ...newTicket, subject: e.target.value })
-                                }
-                                className="input-box"
-                                required
-                            />
-                            <textarea
-                                placeholder="Enter ticket description..."
-                                value={newTicket.description}
-                                onChange={(e) =>
-                                    setNewTicket({ ...newTicket, description: e.target.value })
-                                }
-                                className="input-box"
-                                rows={3}
-                                required
-                            ></textarea>
-                            <button type="submit" className="create-btn">
-                                Submit
-                            </button>
-                        </form>
-                    </div>
-                )}
             </div>
             {/* FEEDBACK POPUP (NEW) */}
             {feedbackTicket && (
@@ -596,8 +588,12 @@ function SupportDashboard() {
 
                         <div className="popup-buttons">
                             <button
-                                className="submit-btn"
-                                onClick={async () => {
+                            className="submit-btn"
+                            onClick={async () => {
+                                    if (!feedbackTicket.rating || !(feedbackTicket.feedback || "").trim()) {
+                                        alert("Please provide a rating and feedback before submitting.");
+                                        return;
+                                    }
                                     try {
                                         await addDoc(collection(db, "feedback"), {
                                             ticketId: feedbackTicket.id,

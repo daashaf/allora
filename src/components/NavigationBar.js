@@ -130,7 +130,8 @@ export default function NavigationBar({
   const pathname = location.pathname;
   const isAgentView = pathname.startsWith("/agent-dashboard") || currentRole === "Customer Support";
   const isAdminView = pathname.startsWith("/admin") || currentRole === "Administrator";
-  const isProviderView = pathname.startsWith("/provider") || currentRole === "Service Provider";
+  // Only show the provider workspace nav when actually on provider routes, not on customer pages.
+  const isProviderView = pathname.startsWith("/provider");
   const isMinimalNav = isAgentView || isAdminView || isProviderView;
 
   const minimalHeading = () => {

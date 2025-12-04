@@ -868,7 +868,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   // Notification Center: compose + history
   const [notificationView, setNotificationView] = useState("Compose");
   const [compose, setCompose] = useState({
-    audience: "All Customers",
+    audience: "Service Providers",
     channel: "Email",
     subject: "",
     message: "",
@@ -1601,9 +1601,8 @@ const getBadgeClass = (value, fallback = "unknown") => {
                           value={compose.audience}
                           onChange={(e) => setCompose((c) => ({ ...c, audience: e.target.value }))}
                         >
-                          <option>All Customers</option>
-                          <option>Service Providers</option>
-                          <option>All Users</option>
+                          <option value="Service Providers">Service Providers</option>
+                          <option value="Customer Support">Customer Support Agents</option>
                         </select>
                       </div>
                       <div className="admin-form-group">

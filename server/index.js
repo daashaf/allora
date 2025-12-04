@@ -352,13 +352,28 @@ app.post("/notifications/send", async (req, res) => {
   }
 
   const normalizedChannel = normalize(channel) || "email";
-  const normalizedAudience = normalize(audience) || "all users";
-  const wantedRoles =
-    normalizedAudience.includes("provider")
-      ? ["service provider", "provider"]
-      : normalizedAudience.includes("customer")
-        ? ["customer"]
-        : null; // null means everyone
+  const normalizedAudience = normalize(audience || "");
+  let audienceLabel = "Service Providers";
+  let wantedRoles = ["service provider", "provider", "service providers"];
+
+  if (normalizedAudience.includes("support") || normalizedAudience.includes("agent")) {
+    audienceLabel = "Customer Support";
+    wantedRoles = [
+      "customer support",
+      "customer support agent",
+      "support agent",
+      "support team",
+      "support",
+      "agent",
+    ];
+  } else if (!normalizedAudience.includes("provider")) {
+    return res
+      .status(400)
+      .json({ message: "Audience must be Service Providers or Customer Support agents." });
+  }
+
+  const roleMatchesAudience = (role = "") =>
+    wantedRoles.some((allowed) => role === allowed || role.includes(allowed));
 
   let recipients = [];
 
@@ -371,7 +386,7 @@ app.post("/notifications/send", async (req, res) => {
           const email = data.email || data.Email || data.emailAddress;
           const role = normalize(data.role || data.Role || data.userType);
           if (!email) return null;
-          if (!wantedRoles || wantedRoles.includes(role)) return email;
+          if (roleMatchesAudience(role)) return email;
           return null;
         })
         .filter(Boolean);
@@ -408,7 +423,7 @@ app.post("/notifications/send", async (req, res) => {
 
   try {
     await firestore.collection("Notification").add({
-      audience: audience || "All Users",
+      audience: audienceLabel,
       channel: normalizedChannel === "in-app" ? "In-App" : "Email",
       subject,
       message,
