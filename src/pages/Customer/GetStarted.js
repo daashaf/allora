@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
 import { addDoc, collection, onSnapshot, query, serverTimestamp } from "firebase/firestore";
 import NavigationBar from "../../components/NavigationBar";
 import { addBooking, calculateCommission, parsePrice, COMMISSION_RATE } from "../../commission";
-import { db, ensureFirebaseAuth } from "../../firebase";
+import { auth, db, isBackgroundUserSession } from "../../firebase";
 import "./CustomerDashboard.css";
 
 const NZ_CITIES = [
@@ -72,6 +73,7 @@ export default function GetStarted() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     if (prefillService) {
@@ -80,14 +82,26 @@ export default function GetStarted() {
   }, [prefillService]);
 
   useEffect(() => {
+    if (!auth) {
+      navigate("/login", { replace: true, state: { from: "/get-started" } });
+      return undefined;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const allowed = Boolean(user && !isBackgroundUserSession(user));
+      setIsAuthenticated(allowed);
+      if (!allowed) {
+        navigate("/login", { replace: true, state: { from: "/get-started" } });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
     let unsubscribe;
     const subscribe = async () => {
-      try {
-        await ensureFirebaseAuth();
-      } catch (authErr) {
-        console.warn("[GetStarted] auth not ready, continuing", authErr);
-      }
-      if (!db) return;
+      if (!isAuthenticated || !db) return;
       const servicesQuery = query(collection(db, "Services"));
       unsubscribe = onSnapshot(servicesQuery, (snapshot) => {
         const names = snapshot.docs
@@ -106,7 +120,7 @@ export default function GetStarted() {
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const isValid = useMemo(() => {
     return formData.name && formData.email && formData.service && formData.details;
@@ -135,15 +149,14 @@ export default function GetStarted() {
       return;
     }
 
+    const user = auth?.currentUser;
+    if (!user || isBackgroundUserSession(user)) {
+      navigate("/login", { state: { from: "/get-started" } });
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Try auth but don't fail the request if auth isn't ready (use public rules/demo).
-      try {
-        await ensureFirebaseAuth();
-      } catch (authErr) {
-        console.warn("[GetStarted] auth not ready, continuing", authErr);
-      }
-
       let savedToFirestore = false;
 
       if (db) {
@@ -158,9 +171,16 @@ export default function GetStarted() {
             commissionRate: pricing.commissionRate,
           });
 
+
           const orderDoc = await addDoc(collection(db, "Order"), {
             email: formData.email,
             customerName: formData.name,
+
+          await addDoc(collection(db, "Order"), {
+            name: formData.name,
+            customerName: formData.name,
+            email: formData.email,
+
             customerEmail: formData.email,
             phone: formData.phone || "",
             city: formData.city || "",
@@ -170,6 +190,7 @@ export default function GetStarted() {
             providerId: formData.providerId || prefillProviderId || "",
             providerName: formData.providerName || prefillProviderName || "",
             priceToPay: pricing.totalPrice,
+            totalPrice: pricing.totalPrice,
             fullPrice: pricing.totalPrice,
             totalPrice: pricing.totalPrice,
             basePrice: pricing.basePrice,
@@ -186,8 +207,17 @@ export default function GetStarted() {
               providerEmail: formData.providerEmail.toLowerCase(),
               providerId: formData.providerId || "",
               subject: "New booking request",
+
               message: `${formData.name} has requested ${formData.service}. Check your dashboard to accept or decline this booking.`,
               status: "Sent",
+
+              message: `${formData.name} requested ${formData.service} in ${formData.city || 'your area'}.`,
+              customerName: formData.name,
+              customerEmail: formData.email,
+              service: formData.service,
+              city: formData.city,
+              status: "New",
+
               sentAt: serverTimestamp(),
             });
           }
@@ -208,8 +238,11 @@ export default function GetStarted() {
         console.warn("[GetStarted] Request email failed (ignored)", notifyErr);
       }
 
+
       // Only use addBooking as fallback if Firestore failed
       if (!savedToFirestore) {
+
+
         await addBooking({
           service: formData.service,
           providerEmail: formData.providerEmail || prefillProviderEmail,
@@ -219,6 +252,7 @@ export default function GetStarted() {
           customerEmail: formData.email,
           city: formData.city,
           basePrice: pricing.basePrice,
+
           totalPrice: pricing.totalPrice,
           commissionAmount: pricing.commissionAmount,
           commissionRate: pricing.commissionRate,
@@ -226,6 +260,14 @@ export default function GetStarted() {
           source: "GetStarted",
         });
       }
+
+        totalPrice: pricing.totalPrice,
+        commissionAmount: pricing.commissionAmount,
+        commissionRate: pricing.commissionRate,
+        status: "Booked",
+        source: "GetStarted",
+      });
+
 
       if (!savedToFirestore && !db) {
         console.warn("[GetStarted] No Firestore available; booking stored locally only.");

@@ -52,6 +52,12 @@ export const app = appInstance;
 export const auth = appInstance ? getAuth(appInstance) : null;
 export const db = appInstance ? getFirestore(appInstance) : null;
 
+const serviceEmail = (process.env.REACT_APP_FIREBASE_SERVICE_EMAIL || "").toLowerCase();
+const servicePassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD || "";
+const enableServiceAutoLogin =
+  (process.env.REACT_APP_ENABLE_SERVICE_AUTO_LOGIN || "").toLowerCase() === "true";
+const canUseServiceCredentials = Boolean(serviceEmail && servicePassword && enableServiceAutoLogin);
+
 export const ensureUserRole = async (uid, email) => {
   if (!db || !uid) return null;
   const userRef = doc(db, "users", uid);
@@ -76,9 +82,11 @@ export const ensureUserRole = async (uid, email) => {
   return "Customer";
 };
 
+
 const serviceEmail = process.env.REACT_APP_FIREBASE_SERVICE_EMAIL;
 const servicePassword = process.env.REACT_APP_FIREBASE_SERVICE_PASSWORD;
 const enableServiceLogin = (process.env.REACT_APP_ENABLE_SERVICE_LOGIN || "").toLowerCase() === "true";
+
 
 const fallbackUser = { uid: "unauthenticated-client", isAnonymous: true, fromFallback: true };
 
@@ -90,7 +98,11 @@ export const authReady = appInstance
   : Promise.resolve(fallbackUser);
 
 const tryServiceCredentials = async () => {
+
   if (!enableServiceLogin || !auth || !serviceEmail || !servicePassword) return false;
+
+  if (!auth || !canUseServiceCredentials) return false;
+
   try {
     await signInWithEmailAndPassword(auth, serviceEmail, servicePassword);
     // eslint-disable-next-line no-console
@@ -140,6 +152,13 @@ if (auth) {
 }
 
 let warnedUnauthenticated = false;
+export const isBackgroundUserSession = (user) => {
+  if (!user) return false;
+  const email = user.email?.toLowerCase?.();
+  const isServiceAutoUser = canUseServiceCredentials && serviceEmail && email === serviceEmail;
+  return Boolean(user.isAnonymous || user.fromFallback || isServiceAutoUser);
+};
+
 export const ensureFirebaseAuth = async () => {
   const user = await authReady;
   if (user?.fromFallback && !warnedUnauthenticated) {

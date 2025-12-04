@@ -233,9 +233,12 @@ export default function CustomerDashboard() {
               <button type="button" className="nav-cta">
                 New request
               </button>
+
               <button type="button" className="ghost" onClick={() => setShowTicketForm(true)}>
                 Create Support Ticket
               </button>
+
+
             </div>
           </section>
 

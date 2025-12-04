@@ -13,6 +13,9 @@ import {
     orderBy,
     serverTimestamp,
 } from "firebase/firestore";
+
+import { app, isBackgroundUserSession } from "../../firebase";
+
 import NavigationBar from "../../components/NavigationBar";
 import { auth, db } from "../../firebase";
 import "./SupportDashboard.css";
@@ -71,8 +74,7 @@ function SupportDashboard() {
         status: "Open",
     });
     const [showCreateTicket, setShowCreateTicket] = useState(false);
-
-    // Track auth state and fetch user profile
+   // Track auth state and fetch user profile
     useEffect(() => {
         const unsubAuth = onAuthStateChanged(auth, (user) => {
             setAuthUser(user);
@@ -82,6 +84,18 @@ function SupportDashboard() {
 
         return () => unsubAuth();
     }, []);
+
+
+    const requireCustomerLogin = () => {
+        const user = auth?.currentUser;
+        if (!user || isBackgroundUserSession(user)) {
+            navigate("/login", { state: { from: "/support" } });
+            return false;
+        }
+        return true;
+    };
+
+    //  FETCH LOGGED-IN USER INFO 
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -220,6 +234,7 @@ function SupportDashboard() {
     //  CREATE NEW TICKET (AUTO USER INFO + SERVER TIME) 
     const handleCreateTicket = async (e) => {
         e.preventDefault();
+        if (!requireCustomerLogin()) return;
         if (!newTicket.subject.trim() || !newTicket.description.trim()) {
             alert("Please fill in both subject and description.");
             return;
@@ -330,6 +345,7 @@ function SupportDashboard() {
                         className="bi bi-journal-text header-icon"
                         title="My Tickets"
                         onClick={() => {
+                            if (!requireCustomerLogin()) return;
                             setShowTickets((prev) => !prev);
                             setShowNotifications(false);
                             setShowLogout(false);
@@ -467,7 +483,10 @@ function SupportDashboard() {
                     <div>
                         <button
                             className="add-btn"
-                            onClick={() => setShowCreateTicket(!showCreateTicket)}
+                            onClick={() => {
+                                if (!requireCustomerLogin()) return;
+                                setShowCreateTicket(!showCreateTicket);
+                            }}
                         >
                             + Create
                         </button>

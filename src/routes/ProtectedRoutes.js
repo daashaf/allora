@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth, db, isBackgroundUserSession } from "../firebase";
 
 export function RoleProtectedRoute({ requiredRole, redirectTo = "/login", children }) {
   const [state, setState] = useState({ checking: true, allowed: false });
@@ -22,7 +22,7 @@ export function RoleProtectedRoute({ requiredRole, redirectTo = "/login", childr
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isActive) return;
 
-      if (!currentUser) {
+      if (!currentUser || isBackgroundUserSession(currentUser)) {
         setState({ checking: false, allowed: false });
         return;
       }
@@ -31,7 +31,9 @@ export function RoleProtectedRoute({ requiredRole, redirectTo = "/login", childr
         const snap = await getDoc(doc(db, "users", currentUser.uid));
         const data = snap.exists() ? snap.data() : {};
         const role = data.role || data.Role || data.userType || null;
-        setState({ checking: false, allowed: allowedRoles.includes(role) });
+        const status = (data.status || data.Status || "").toString().toLowerCase();
+        const isBlockedStatus = status === "suspended" || status === "pending";
+        setState({ checking: false, allowed: allowedRoles.includes(role) && !isBlockedStatus });
       } catch (error) {
         console.warn("[Auth] Failed to read role", error);
         setState({ checking: false, allowed: false });
