@@ -149,8 +149,15 @@ export default function Login({ defaultMode = "login" }) {
         return;
       }
 
+
+      // Check if user came from services page and redirect back
+      const returnPath = getReturnPath();
+      if (returnPath && returnPath === "/services" && role === "Customer") {
+        navigate(returnPath, { replace: true });
+
       if (returnPath) {
         navigate(returnPath, { replace: true, state: returnState });
+
         return;
       }
 
@@ -403,21 +410,30 @@ export default function Login({ defaultMode = "login" }) {
           { merge: true }
         );
 
-      // Send welcome email via server
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(signupData),
-      });
+      // Send welcome email via server (non-blocking for local/offline setups)
+      let successMessage = "";
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(signupData),
+        });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || "Welcome email could not be sent. Please try again.");
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          console.warn("[Signup] Welcome email failed:", data?.message || response.statusText);
+          successMessage = "Account created successfully! Email service is offline, continuing without sending email.";
+        } else {
+          successMessage = `Account created successfully! We've emailed ${signupData.email}. Redirecting...`;
+        }
+      } catch (emailError) {
+        console.warn("[Signup] Skipping welcome email; service unreachable.", emailError);
+        successMessage = "Account created successfully! Email service is offline, continuing without sending email.";
       }
 
-      setSignupMessage(`Account created successfully! We've emailed ${signupData.email}. Redirecting...`);
+      setSignupMessage(successMessage || "Account created successfully! Redirecting...");
       setTimeout(() => {
         const returnPath = getReturnPath();
         const returnState = getReturnState();

@@ -171,10 +171,16 @@ export default function GetStarted() {
             commissionRate: pricing.commissionRate,
           });
 
+
+          const orderDoc = await addDoc(collection(db, "Order"), {
+            email: formData.email,
+            customerName: formData.name,
+
           await addDoc(collection(db, "Order"), {
             name: formData.name,
             customerName: formData.name,
             email: formData.email,
+
             customerEmail: formData.email,
             phone: formData.phone || "",
             city: formData.city || "",
@@ -186,6 +192,7 @@ export default function GetStarted() {
             priceToPay: pricing.totalPrice,
             totalPrice: pricing.totalPrice,
             fullPrice: pricing.totalPrice,
+            totalPrice: pricing.totalPrice,
             basePrice: pricing.basePrice,
             commissionAmount: pricing.commissionAmount,
             commissionRate: pricing.commissionRate,
@@ -196,14 +203,21 @@ export default function GetStarted() {
           if (formData.providerEmail) {
             await addDoc(collection(db, "Notification"), {
               audience: "Service Providers",
+              channel: "In-App",
               providerEmail: formData.providerEmail.toLowerCase(),
+              providerId: formData.providerId || "",
               subject: "New booking request",
+
+              message: `${formData.name} has requested ${formData.service}. Check your dashboard to accept or decline this booking.`,
+              status: "Sent",
+
               message: `${formData.name} requested ${formData.service} in ${formData.city || 'your area'}.`,
               customerName: formData.name,
               customerEmail: formData.email,
               service: formData.service,
               city: formData.city,
               status: "New",
+
               sentAt: serverTimestamp(),
             });
           }
@@ -224,6 +238,11 @@ export default function GetStarted() {
         console.warn("[GetStarted] Request email failed (ignored)", notifyErr);
       }
 
+
+      // Only use addBooking as fallback if Firestore failed
+      if (!savedToFirestore) {
+
+
         await addBooking({
           service: formData.service,
           providerEmail: formData.providerEmail || prefillProviderEmail,
@@ -233,12 +252,22 @@ export default function GetStarted() {
           customerEmail: formData.email,
           city: formData.city,
           basePrice: pricing.basePrice,
+
+          totalPrice: pricing.totalPrice,
+          commissionAmount: pricing.commissionAmount,
+          commissionRate: pricing.commissionRate,
+          status: "Booked",
+          source: "GetStarted",
+        });
+      }
+
         totalPrice: pricing.totalPrice,
         commissionAmount: pricing.commissionAmount,
         commissionRate: pricing.commissionRate,
         status: "Booked",
         source: "GetStarted",
       });
+
 
       if (!savedToFirestore && !db) {
         console.warn("[GetStarted] No Firestore available; booking stored locally only.");
@@ -322,14 +351,24 @@ export default function GetStarted() {
               </div>
               <div>
                 <label htmlFor="service">Service</label>
-                <select id="service" name="service" value={formData.service} onChange={handleChange} required>
-                  <option value="">Select a service</option>
+                <input
+                  id="service"
+                  name="service"
+                  list="service-options"
+                  type="text"
+                  value={formData.service}
+                  onChange={handleChange}
+                  required
+                  placeholder="Select or type a service"
+                />
+                <datalist id="service-options">
                   {serviceOptions.map((serviceName) => (
-                    <option key={serviceName} value={serviceName}>
-                      {serviceName}
-                    </option>
+                    <option key={serviceName} value={serviceName} />
                   ))}
-                </select>
+                </datalist>
+                {!serviceOptions.length && (
+                  <small className="text-muted">Start typing the service you need.</small>
+                )}
               </div>
             </div>
 
@@ -410,3 +449,4 @@ export default function GetStarted() {
     </div>
   );
 }
+

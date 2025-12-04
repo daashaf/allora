@@ -1,9 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, query } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import NavigationBar from "../../components/NavigationBar";
 import { calculateCommission, parsePrice } from "../../commission";
+
+import { auth, db, ensureFirebaseAuth } from "../../firebase";
+
 import { auth, db, ensureFirebaseAuth, isBackgroundUserSession } from "../../firebase";
+
 import "./CustomerDashboard.css";
 
 export default function Services() {
@@ -11,6 +17,39 @@ export default function Services() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Authentication state listener
+  useEffect(() => {
+    if (!auth) {
+      setAuthLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      
+      if (user && !user.isAnonymous && db) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUserRole(userData.role || userData.Role || userData.userType || null);
+          }
+        } catch (error) {
+          console.warn("[Services] Failed to get user role", error);
+        }
+      } else {
+        setUserRole(null);
+      }
+      
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     let unsubscribe;
@@ -84,9 +123,34 @@ export default function Services() {
 
   const liveCount = useMemo(() => services.length, [services]);
 
+  const requireCustomerLogin = () => {
+    const user = auth?.currentUser;
+    if (user && !user.isAnonymous) {
+      // User is logged in, allow hiring
+      return true;
+    }
+    alert("Please log in as a customer to hire a provider.");
+    navigate("/login", { replace: false, state: { from: "/services" } });
+    return false;
+  };
+
   const handleHire = (service) => {
+    if (!requireCustomerLogin()) return;
     const basePrice = parsePrice(service?.price || service?.rate || 0);
     const { totalPrice } = calculateCommission(basePrice);
+
+    const providerEmail = service?.providerEmail || service?.provider_email || service?.email || "";
+    navigate("/get-started", {
+      state: {
+        prefill: service?.service || service?.serviceName || service || "",
+        providerEmail: providerEmail,
+        providerName: service?.provider || service?.company || service?.providerName || "",
+        providerId: service?.providerId || service?.providerID || service?.id || "",
+        basePrice,
+        totalPrice,
+      },
+    });
+
 
     const redirectState = {
       prefill: service?.service || service?.serviceName || service || "",
@@ -99,6 +163,7 @@ export default function Services() {
 
     if (!requireCustomerLogin("/get-started", redirectState)) return;
     navigate("/get-started", { state: redirectState });
+
   };
 
   return (
@@ -192,7 +257,7 @@ export default function Services() {
                           <span>{service.city || service.location}</span>
                         ) : null}
                         {service.experience ? <span>{service.experience} experience</span> : null}
-                        {service.email ? <span>{service.email}</span> : null}
+                        <span className="provider-email">{service.providerEmail || service.provider_email || service.email || "Contact via platform"}</span>
                         <span>{priceLabel}</span>
                       </div>
 

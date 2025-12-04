@@ -1,3 +1,6 @@
+import { addDoc, collection, deleteDoc, doc, getDocs, limit, query, serverTimestamp, updateDoc } from "firebase/firestore";
+import { db, ensureFirebaseAuth } from "./firebase";
+
 const PROVIDER_KEY = "allora_service_providers";
 const SERVICE_KEY = "allora_services";
 
@@ -76,17 +79,93 @@ const writeStore = (key, value) => {
   }
 };
 
-export const getServiceProviders = async () => readStore(PROVIDER_KEY, seedProviders);
+const mapFirestoreDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+// Service provider records must live in the primary Firestore collection below.
+const providerCollections = ["ServiceProvider"];
+
+const getProviderCollectionRef = (name) => collection(db, name);
+
+const resolveProviderCollection = async () => {
+  const name = providerCollections[0];
+  const ref = getProviderCollectionRef(name);
+  // Verify the collection is reachable; surface errors to the caller so registration cannot silently fall back.
+  const snap = await getDocs(query(ref, limit(1)));
+  return { ref, name, hasDocs: !snap.empty };
+};
+
+// Ensure we never persist raw passwords alongside provider profiles.
+const scrubProviderSecrets = (provider = {}) => {
+  const { password: _password, ...rest } = provider;
+  return rest;
+};
+
+export const getServiceProviders = async () => {
+  if (db) {
+    try {
+      await ensureFirebaseAuth();
+      const { ref } = await resolveProviderCollection();
+      const snap = await getDocs(ref);
+      return mapFirestoreDocs(snap);
+    } catch (error) {
+      console.warn("[ServiceProviderCRUD] Falling back to local storage for providers", error);
+    }
+  }
+  return readStore(PROVIDER_KEY, seedProviders);
+};
 
 export const addServiceProvider = async (provider) => {
-  const list = readStore(PROVIDER_KEY, seedProviders);
-  const record = { id: randomId(), ...provider };
-  list.push(record);
-  writeStore(PROVIDER_KEY, list);
-  return record;
+  if (!db) {
+    throw new Error("Firebase is not configured. Provider registrations must be saved to Firestore.");
+  }
+
+  try {
+    await ensureFirebaseAuth();
+    const { ref, name } = await resolveProviderCollection();
+    const safeProvider = scrubProviderSecrets(provider);
+    const payload = {
+      ...safeProvider,
+      providerId: safeProvider.providerId || `SP-${Date.now()}`,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    const docRef = await addDoc(ref, payload);
+
+    // Notify admins of new pending provider registration
+    if (payload.status === "Pending") {
+      try {
+        await addDoc(collection(db, "Notification"), {
+          audience: "Admin",
+          channel: "In-App",
+          subject: "New Provider Registration",
+          message: `${payload.businessName || payload.ownerName || "A new provider"} has registered and is pending approval.`,
+          status: "Sent",
+          sentAt: serverTimestamp(),
+        });
+      } catch (notifyError) {
+        console.warn("[ServiceProviderCRUD] Failed to send admin notification", notifyError);
+      }
+    }
+
+    return { id: docRef.id, collection: name, ...payload };
+  } catch (error) {
+    console.error("[ServiceProviderCRUD] Failed to add provider to Firestore", error);
+    throw error;
+  }
 };
 
 export const updateServiceProvider = async (id, updates) => {
+  if (db) {
+    try {
+      await ensureFirebaseAuth();
+      const { name } = await resolveProviderCollection();
+      const safeUpdates = scrubProviderSecrets(updates);
+      await updateDoc(doc(db, name, id), { ...safeUpdates, updatedAt: serverTimestamp() });
+      return { id, ...updates };
+    } catch (error) {
+      console.warn("[ServiceProviderCRUD] Failed to update provider in Firestore, trying local storage", error);
+    }
+  }
+
   const list = readStore(PROVIDER_KEY, seedProviders);
   const idx = list.findIndex((item) => item.id === id);
   if (idx >= 0) {
@@ -98,6 +177,17 @@ export const updateServiceProvider = async (id, updates) => {
 };
 
 export const deleteServiceProvider = async (id) => {
+  if (db) {
+    try {
+      await ensureFirebaseAuth();
+      const { name } = await resolveProviderCollection();
+      await deleteDoc(doc(db, name, id));
+      return true;
+    } catch (error) {
+      console.warn("[ServiceProviderCRUD] Failed to delete provider from Firestore, trying local storage", error);
+    }
+  }
+
   const list = readStore(PROVIDER_KEY, seedProviders).filter((item) => item.id !== id);
   writeStore(PROVIDER_KEY, list);
   return true;

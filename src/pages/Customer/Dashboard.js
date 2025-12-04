@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where, addDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../../firebase";
 import NavigationBar from "../../components/NavigationBar";
 import "./CustomerDashboard.css";
@@ -48,6 +48,9 @@ export default function CustomerDashboard() {
   const [bookings, setBookings] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [ticketStats, setTicketStats] = useState({ open: 0, total: 0 });
+  const [showTicketForm, setShowTicketForm] = useState(false);
+  const [ticketForm, setTicketForm] = useState({ subject: "", message: "", priority: "Medium" });
+  const [ticketSubmitting, setTicketSubmitting] = useState(false);
 
   useEffect(() => {
     if (!auth) return undefined;
@@ -121,9 +124,6 @@ export default function CustomerDashboard() {
       if (currentUser?.uid) {
         return query(collection(db, "tickets"), where("userId", "==", currentUser.uid));
       }
-      if (currentUser?.email) {
-        return query(collection(db, "tickets"), where("userEmail", "==", currentUser.email));
-      }
       return null;
     };
     const q = buildQuery();
@@ -132,7 +132,9 @@ export default function CustomerDashboard() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const docs = snapshot.docs.map((docSnap) => docSnap.data() || {});
+        const docs = snapshot.docs
+          .map((docSnap) => docSnap.data() || {})
+          .filter((t) => !currentUser?.uid || t.userId === currentUser.uid);
         const total = docs.length;
         const open = docs.filter((t) => {
           const status = (t.status || "").toString().toLowerCase();
@@ -161,6 +163,42 @@ export default function CustomerDashboard() {
       { label: "Support tickets", value: `${openTickets} open`, detail: "Response within 2 hours" },
     ];
   }, [bookings, ticketStats.open]);
+
+  const createTicket = async () => {
+    if (!ticketForm.subject.trim() || !ticketForm.message.trim()) {
+      alert("Please fill in both subject and message.");
+      return;
+    }
+
+    if (!currentUser?.uid || !currentUser?.email) {
+      alert("Please log in to create a support ticket.");
+      setShowTicketForm(false);
+      return;
+    }
+    
+    setTicketSubmitting(true);
+    try {
+      await addDoc(collection(db, "tickets"), {
+        subject: ticketForm.subject.trim(),
+        message: ticketForm.message.trim(),
+        priority: ticketForm.priority,
+        status: "Open",
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
+        customer: currentUser.email,
+        createdAt: serverTimestamp(),
+      });
+      
+      setTicketForm({ subject: "", message: "", priority: "Medium" });
+      setShowTicketForm(false);
+      alert("Support ticket created successfully!");
+    } catch (error) {
+      console.error("Failed to create ticket:", error);
+      alert("Failed to create ticket. Please try again.");
+    } finally {
+      setTicketSubmitting(false);
+    }
+  };
 
   const displayedBookings = bookingsLoading
     ? []
@@ -195,6 +233,12 @@ export default function CustomerDashboard() {
               <button type="button" className="nav-cta">
                 New request
               </button>
+
+              <button type="button" className="ghost" onClick={() => setShowTicketForm(true)}>
+                Create Support Ticket
+              </button>
+
+
             </div>
           </section>
 
@@ -248,6 +292,68 @@ export default function CustomerDashboard() {
             </div>
           </section>
         </main>
+        
+        {showTicketForm && (
+          <div style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)", display: "flex",
+            alignItems: "center", justifyContent: "center", zIndex: 1000
+          }}>
+            <div style={{
+              backgroundColor: "white", padding: "24px", borderRadius: "12px",
+              width: "90%", maxWidth: "500px", maxHeight: "80vh", overflow: "auto"
+            }}>
+              <h3>Create Support Ticket</h3>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "8px" }}>Subject</label>
+                <input
+                  type="text"
+                  value={ticketForm.subject}
+                  onChange={(e) => setTicketForm({...ticketForm, subject: e.target.value})}
+                  style={{ width: "100%", padding: "8px", border: "1px solid #ccc", borderRadius: "4px" }}
+                  placeholder="Brief description of your issue"
+                />
+              </div>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "8px" }}>Priority</label>
+                <select
+                  value={ticketForm.priority}
+                  onChange={(e) => setTicketForm({...ticketForm, priority: e.target.value})}
+                  style={{ width: "100%", padding: "8px", border: "1px solid #ccc", borderRadius: "4px" }}
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "8px" }}>Message</label>
+                <textarea
+                  value={ticketForm.message}
+                  onChange={(e) => setTicketForm({...ticketForm, message: e.target.value})}
+                  style={{ width: "100%", padding: "8px", border: "1px solid #ccc", borderRadius: "4px", minHeight: "100px" }}
+                  placeholder="Describe your issue in detail"
+                />
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setShowTicketForm(false)}
+                  style={{ padding: "8px 16px", border: "1px solid #ccc", borderRadius: "4px", backgroundColor: "white" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={createTicket}
+                  disabled={ticketSubmitting}
+                  style={{ padding: "8px 16px", border: "none", borderRadius: "4px", backgroundColor: "#007bff", color: "white" }}
+                >
+                  {ticketSubmitting ? "Creating..." : "Create Ticket"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

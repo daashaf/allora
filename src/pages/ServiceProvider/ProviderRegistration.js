@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -38,6 +38,14 @@ export default function ProviderRegistration() {
 
     try {
       setSubmitting(true);
+
+      const { password, ...safeFormData } = formData;
+      await addServiceProvider({
+        ...safeFormData,
+        status: "Pending",
+        providerId: `SP-${Date.now()}`,
+      });
+
 
       const providerId = `SP-${Date.now()}`;
       const normalizedEmail = formData.email.trim().toLowerCase();
@@ -110,6 +118,9 @@ export default function ProviderRegistration() {
       });
     } catch (error) {
       console.error("Failed to register provider", error);
+
+      setMessage("Unable to submit registration to the server. Please try again once online.");
+
       if (error?.code === "auth/email-already-in-use") {
         setMessage("An account already exists for this email. Try logging in instead.");
       } else if (error?.code === "auth/weak-password") {
@@ -117,6 +128,7 @@ export default function ProviderRegistration() {
       } else {
         setMessage("Unable to submit registration. Please try again.");
       }
+
     } finally {
       setSubmitting(false);
     }

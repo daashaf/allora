@@ -59,6 +59,9 @@ function getExpiryDate() {
   return new Date(Date.now() + minutes * 60 * 1000);
 }
 
+const normalize = (value = "") =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
 async function sendMailWithTimeout(options, timeoutMs = 8000) {
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error("MAIL_TIMEOUT")), timeoutMs)
@@ -260,13 +263,15 @@ Allora Support`,
            <p style="margin-top:20px;">Nga mihi,<br/>Allora Support</p>`,
   };
 
+  let emailSent = false;
   try {
     await sendMailWithTimeout(mailPayload);
+    emailSent = true;
   } catch (error) {
     console.warn("[provider-approval] User created, email failed:", error.message);
   }
 
-  return res.json({ message: "Provider approved.", uid: userRecord.uid });
+  return res.json({ message: "Provider approved.", uid: userRecord.uid, emailSent });
 });
 
 app.post("/provider/notify-approval", async (req, res) => {
@@ -337,6 +342,103 @@ Allora Support`,
     console.warn("[provider-register] Failed to send registration email:", error.message);
     return res.status(500).json({ message: "Could not send email right now." });
   }
+});
+
+app.post("/notifications/send", async (req, res) => {
+  const { audience, channel, subject, message } = req.body || {};
+
+  if (!subject || !message) {
+    return res.status(400).json({ message: "Subject and message are required." });
+  }
+
+  const normalizedChannel = normalize(channel) || "email";
+  const normalizedAudience = normalize(audience || "");
+  let audienceLabel = "Service Providers";
+  let wantedRoles = ["service provider", "provider", "service providers"];
+
+  if (normalizedAudience.includes("support") || normalizedAudience.includes("agent")) {
+    audienceLabel = "Customer Support";
+    wantedRoles = [
+      "customer support",
+      "customer support agent",
+      "support agent",
+      "support team",
+      "support",
+      "agent",
+    ];
+  } else if (!normalizedAudience.includes("provider")) {
+    return res
+      .status(400)
+      .json({ message: "Audience must be Service Providers or Customer Support agents." });
+  }
+
+  const roleMatchesAudience = (role = "") =>
+    wantedRoles.some((allowed) => role === allowed || role.includes(allowed));
+
+  let recipients = [];
+
+  if (normalizedChannel === "email") {
+    try {
+      const snapshot = await firestore.collection("users").get();
+      recipients = snapshot.docs
+        .map((docSnap) => docSnap.data())
+        .map((data) => {
+          const email = data.email || data.Email || data.emailAddress;
+          const role = normalize(data.role || data.Role || data.userType);
+          if (!email) return null;
+          if (roleMatchesAudience(role)) return email;
+          return null;
+        })
+        .filter(Boolean);
+
+      // Remove duplicates to avoid multiple sends to the same mailbox.
+      recipients = Array.from(new Set(recipients));
+
+      if (recipients.length === 0) {
+        return res.status(400).json({ message: "No recipients found for this audience." });
+      }
+    } catch (error) {
+      console.error("[notifications] Failed to fetch recipients", error.message);
+      return res.status(500).json({ message: "Could not load recipients." });
+    }
+  }
+
+  let status = "Sent";
+  if (normalizedChannel === "email") {
+    const mailPayload = {
+      from: process.env.MAIL_USER,
+      bcc: recipients,
+      subject,
+      text: message,
+      html: `<p>${message.replace(/\n/g, "<br/>")}</p>`,
+    };
+
+    try {
+      await sendMailWithTimeout(mailPayload);
+    } catch (error) {
+      console.error("[notifications] Failed to send email broadcast:", error.message);
+      status = "Failed";
+    }
+  }
+
+  try {
+    await firestore.collection("Notification").add({
+      audience: audienceLabel,
+      channel: normalizedChannel === "in-app" ? "In-App" : "Email",
+      subject,
+      message,
+      status,
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    console.warn("[notifications] Could not write notification record:", error.message);
+  }
+
+  if (status === "Failed") {
+    return res.status(500).json({ message: "Email broadcast failed to send." });
+  }
+
+  return res.json({ message: "Notification sent.", recipients: recipients.length });
 });
 
 app.post("/requests/notify", async (req, res) => {
