@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { signOut } from "firebase/auth";
+
 import { ReactComponent as InfinityLogo } from "./assets/infinity-logo.svg";
 import AppRoutes from "./routes/AppRoutes";
 import { auth } from "./firebase";
@@ -21,11 +21,7 @@ export default function App() {
     };
   }, []);
 
-  // Clear any existing auth session on app start so the app opens logged out.
-  useEffect(() => {
-    if (!auth) return;
-    signOut(auth).catch(() => {});
-  }, []);
+
 
   return (
     <>

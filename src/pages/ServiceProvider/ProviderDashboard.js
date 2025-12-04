@@ -1,17 +1,8 @@
 // src/components/ServiceProviderDashboard.js
 import React, { useEffect, useMemo, useState } from "react";
 import { Container, Row, Col, Card, Button, Modal, Form, Table, Badge, Alert, Nav } from "react-bootstrap";
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
-import {
-  getServiceProviders,
-  addServiceProvider,
-  updateServiceProvider,
-  deleteServiceProvider,
-  getServices,
-  addService,
-  updateService,
-  deleteService
-} from "../../serviceProviderCRUD";
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { getServiceProviders, getServices, addService, updateService, deleteService } from "../../serviceProviderCRUD";
 import { COMMISSION_RATE, formatCurrency, summarizeBookings } from "../../commission";
 import NavigationBar from "../../components/NavigationBar";
 import { auth, db, ensureFirebaseAuth } from "../../firebase";
@@ -32,7 +23,6 @@ export default function ServiceProviderDashboard() {
     category: "Home Services",
     status: "Pending"
   });
-  const [editingProviderId, setEditingProviderId] = useState(null);
 
   const [services, setServices] = useState([]);
   const [showServiceModal, setShowServiceModal] = useState(false);
@@ -85,16 +75,6 @@ export default function ServiceProviderDashboard() {
       }),
     [bookings]
   );
-
-  const providerProfile = useMemo(() => {
-    const email = (currentEmail || "").toLowerCase();
-    if (!email) return null;
-    return (
-      providers.find((p) => (p.email || p.emailAddress || p.providerEmail || "").toLowerCase() === email) ||
-      providers.find((p) => (p.ownerEmail || p.contactEmail || "").toLowerCase() === email) ||
-      null
-    );
-  }, [providers, currentEmail]);
 
   const providerIdLower = useMemo(
     () => String(providerProfile?.providerId || providerProfile?.provider_id || "").toLowerCase(),
@@ -200,8 +180,6 @@ export default function ServiceProviderDashboard() {
     if (!db || !currentEmail) return undefined;
     let mounted = true;
 
-    const notificationsQuery = query(collection(db, "Notification"), orderBy("sentAt", "desc"));
-
     const emailLower = currentEmail.toLowerCase();
     
     console.log(`[ProviderDashboard] Loading profile for email: ${emailLower}`);
@@ -240,18 +218,14 @@ export default function ServiceProviderDashboard() {
       unsubscribers.push(unsub);
     });
 
-    const notificationsQuery = query(
-      collection(db, "Notification"),
-      where("providerEmail", "==", currentEmail.toLowerCase()),
-      orderBy("sentAt", "desc")
-    );
+    // Listen to all notifications so broadcasts to all providers (no providerEmail) are also received.
+    const notificationsQuery = collection(db, "Notification");
 
     const unsubscribe = onSnapshot(
       notificationsQuery,
       (snapshot) => {
         if (!mounted) return;
 
-        const currentEmailLower = currentEmail.toLowerCase();
         const docs = snapshot.docs
           .map((docSnap) => {
             const data = docSnap.data();
@@ -299,12 +273,7 @@ export default function ServiceProviderDashboard() {
           (visibleDocs[0].sentOrder || 0) > lastSeenProviderNotifications
         ) {
           setNewNotificationBanner(visibleDocs[0]);
-
-        const docs = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-        setProviderNotifications(docs);
-        setProviderUnreadCount(docs.filter((n) => !n.readAt).length);
-        console.log(`[ProviderDashboard] Loaded ${docs.length} notifications for ${currentEmail}`);
-
+        }
       },
       (error) => {
         console.warn("[ProviderDashboard] Failed to load notifications", error);
@@ -315,7 +284,7 @@ export default function ServiceProviderDashboard() {
       unsubscribers.forEach(unsub => unsub && unsub());
       if (unsubscribe) unsubscribe();
     };
-  }, [currentEmail, lastSeenProviderNotifications, providerHiddenBefore, providerEmails, providerIdLower]);
+  }, [currentEmail, lastSeenProviderNotifications, providerHiddenBefore, providerEmails, providerIdLower, providerProfile]);
 
   const markProviderNotificationsSeen = () => {
     const now = Date.now();
@@ -402,28 +371,6 @@ export default function ServiceProviderDashboard() {
     };
   }, [currentEmail, providerEmails, providerIdLower]);
 
-    
-    const ownerEmail = currentEmail.toLowerCase();
-    console.log(`[ProviderDashboard] Loading bookings for: ${ownerEmail}`);
-
-    const bookingsQuery = query(
-      collection(db, "Order"),
-      where("providerEmail", "==", ownerEmail)
-    );
-
-    const unsubscribe = onSnapshot(
-      bookingsQuery,
-      (snapshot) => {
-        const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        console.log(`[ProviderDashboard] Found ${docs.length} bookings`);
-        setBookings(docs);
-      },
-      (error) => console.error("[ProviderDashboard] Error loading bookings:", error)
-    );
-
-    return unsubscribe;
-  }, [currentEmail, db]);
-
   const filteredServices = useMemo(() => {
     const ownerEmail = (providerProfile?.email || currentEmail || "").toLowerCase();
     if (!ownerEmail) return [];
@@ -477,7 +424,7 @@ export default function ServiceProviderDashboard() {
         console.warn("[ProviderDashboard] Failed to backfill service ownership", svc.id, error);
       }
     });
-  }, [services, currentEmail, providerProfile, db]);
+  }, [services, currentEmail, providerProfile]);
 
 
   // ... (keep all your existing handler functions exactly the same)
@@ -542,12 +489,8 @@ export default function ServiceProviderDashboard() {
 
           providerId: serviceFormData.providerId || providerProfile?.providerId || providerProfile?.provider_id || "",
           provider: serviceFormData.providerId || providerProfile?.providerId || providerProfile?.provider_id || "",
-          providerEmail: currentEmail.toLowerCase(),
-          provider_email: currentEmail.toLowerCase(),
-
-          providerId: serviceFormData.providerId || providerProfile?.providerId || "",
-          provider: serviceFormData.providerId || providerProfile?.providerId || "",
           providerEmail: currentEmail?.toLowerCase?.() || "",
+          provider_email: currentEmail?.toLowerCase?.() || "",
 
           available: serviceFormData.available,
           status: "Approved",
@@ -631,8 +574,6 @@ export default function ServiceProviderDashboard() {
   }, [providerProfile, providerEmails, providers]);
 
   const activeProviders = scopedProviders.filter((p) => p.status === "Active").length;
-  const pendingProviders = scopedProviders.filter((p) => p.status === "Pending").length;
-  const availableServices = providerServices.filter((s) => s.available).length;
   const bookingTotals = useMemo(() => summarizeBookings(bookings), [bookings]);
   const commissionRatePercent = Math.round((COMMISSION_RATE || 0) * 100);
   const analyticsStats = useMemo(() => {
@@ -687,16 +628,6 @@ export default function ServiceProviderDashboard() {
     });
     return Array.from(seriesMap.values());
   }, [bookings]);
-
-  const bookingNotifications = useMemo(
-    () =>
-      providerNotifications.filter((n) => {
-        const subject = (n.subject || "").toLowerCase();
-        const message = (n.message || "").toLowerCase();
-        return subject.includes("booking") || message.includes("booking");
-      }),
-    [providerNotifications]
-  );
 
   const getBookingStatusVariant = (status) => {
     const normalized = String(status || "").toLowerCase();
@@ -772,11 +703,7 @@ export default function ServiceProviderDashboard() {
           activeSection="provider"
           notificationCount={providerUnreadCount}
           notifications={providerNotifications}
-
-          onNotificationsViewed={markProviderNotificationsSeen}
-
           onNotificationsViewed={markNotificationsRead}
-
         />
         <div className="dashboard-wrapper">
           <Container fluid className="dashboard-content">
@@ -843,9 +770,9 @@ export default function ServiceProviderDashboard() {
               className="nav-link-custom"
             >
               <i className="bi bi-bell-fill"></i> Notifications
-              {unreadProviderNotifications > 0 && (
+              {providerUnreadCount > 0 && (
                 <Badge bg="danger" pill className="ms-2">
-                  {unreadProviderNotifications}
+                  {providerUnreadCount}
                 </Badge>
               )}
             </Nav.Link>
@@ -859,23 +786,7 @@ export default function ServiceProviderDashboard() {
               <i className="bi bi-bar-chart-fill"></i> Analytics
             </Nav.Link>
           </Nav.Item>
-          <Nav.Item>
-            <Nav.Link
-              active={activeView === "notifications"}
-              onClick={() => {
-                setActiveView("notifications");
-                markProviderNotificationsSeen();
-              }}
-              className="nav-link-custom"
-            >
-              <i className="bi bi-bell-fill"></i> Notifications{" "}
-              {providerUnreadCount > 0 && (
-                <Badge bg="danger" pill className="ms-2">
-                  {providerUnreadCount}
-                </Badge>
-              )}
-            </Nav.Link>
-          </Nav.Item>
+
         </Nav>
 
         {/* Overview Section */}
@@ -916,11 +827,7 @@ export default function ServiceProviderDashboard() {
                     <div className="stat-icon">
                       <i className="bi bi-briefcase"></i>
                     </div>
-
-                    <h3 className="stat-number">{providerServices.length}</h3>
-
                     <h3 className="stat-number">{filteredServices.length}</h3>
-
                     <p className="stat-label">Your Services</p>
                     <div className="stat-badge">
                       <Badge bg="warning">{filteredServices.filter(s => s.available).length} Available</Badge>
@@ -1003,10 +910,6 @@ export default function ServiceProviderDashboard() {
 
             {providerServices.length === 0 ? (
               <Row className="g-4">
-
-            <Row className="g-4">
-              {filteredServices.length === 0 ? (
-
                 <Col xs={12}>
                   <Card className="text-center py-5">
                     <Card.Body>
@@ -1015,7 +918,6 @@ export default function ServiceProviderDashboard() {
                     </Card.Body>
                   </Card>
                 </Col>
-
               </Row>
             ) : (
               <Card className="table-card wider-table">
@@ -1073,48 +975,6 @@ export default function ServiceProviderDashboard() {
               </Card>
             )}
 
-              ) : (
-                filteredServices.map((service) => (
-                  <Col lg={4} md={6} key={service.id}>
-                    <Card className="service-card">
-                      <Card.Body>
-                        <div className="service-header">
-                          <Badge bg={service.available ? "success" : "secondary"}>
-                            {service.available ? "Available" : "Unavailable"}
-                          </Badge>
-                          <Badge bg="info">{service.category}</Badge>
-                        </div>
-                        <h5 className="mt-3">{service.serviceName}</h5>
-                        <p className="text-muted">{service.description}</p>
-                        <div className="service-details">
-                          <div className="detail-item">
-                            <i className="bi bi-tag"></i>
-                            <strong>${service.price}</strong>
-                          </div>
-                          <div className="detail-item">
-                            <i className="bi bi-clock"></i>
-                            <span>{service.duration}</span>
-                          </div>
-                          <div className="detail-item">
-                            <i className="bi bi-person"></i>
-                            <span>{service.providerId}</span>
-                          </div>
-                        </div>
-                        <div className="service-actions">
-                          <Button size="sm" variant="warning" onClick={() => handleEditService(service)}>
-                            <i className="bi bi-pencil"></i> Edit
-                          </Button>
-                          <Button size="sm" variant="danger" onClick={() => handleDeleteService(service.id)}>
-                            <i className="bi bi-trash"></i> Delete
-                          </Button>
-                        </div>
-                      </Card.Body>
-                    </Card>
-                  </Col>
-                ))
-              )}
-            </Row>
-
           </>
         )}
 
@@ -1126,8 +986,6 @@ export default function ServiceProviderDashboard() {
                 <h3>Bookings</h3>
                 <p className="text-muted">New customer requests and confirmed bookings</p>
               </div>
-
-
               <div className="d-flex gap-2">
                 <Button
                   variant={bookingView === "all" ? "primary" : "outline-primary"}
@@ -1141,9 +999,7 @@ export default function ServiceProviderDashboard() {
                 >
                   New
                 </Button>
-
               </div>
-
             </div>
 
             <Row className="g-4">
@@ -1163,13 +1019,8 @@ export default function ServiceProviderDashboard() {
                   <Card.Body className="p-0">
                     {managedBookings.length === 0 ? (
                       <div className="text-center py-5">
-
                         <i className="bi bi-clipboard-check" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
                         <p className="text-muted mt-3">No active bookings yet.</p>
-
-                        <i className="bi bi-inbox" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
-                        <p className="text-muted mt-3">No bookings yet for {currentEmail}.</p>
-
                       </div>
                     ) : (
                       <Table responsive hover className="modern-table">
@@ -1179,14 +1030,11 @@ export default function ServiceProviderDashboard() {
                             <th>Customer</th>
                             <th>City</th>
                             <th>Total Price</th>
-                            <th>Your Earnings</th>
-                            <th>Commission</th>
                             <th>Status</th>
                             <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-
                           {managedBookings.map((booking) => (
                             <tr key={booking.id}>
                               <td>{booking.service || "Service"}</td>
@@ -1249,102 +1097,6 @@ export default function ServiceProviderDashboard() {
                     </div>
                   </Card.Header>
                   <Card.Body className="p-0">
-                    {bookingNotifications.length > 0 && (
-                      <div className="p-3 border-bottom bg-light">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <div>
-                            <strong>Booking notifications</strong>
-                            <div className="text-muted small">Review each message and take action below.</div>
-                          </div>
-                          <Badge bg="primary">{bookingNotifications.length}</Badge>
-                        </div>
-                        <Table responsive hover className="modern-table mb-0">
-                          <thead>
-                            <tr>
-                              <th>Subject</th>
-                              <th>Message</th>
-                              <th>Sent</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {bookingNotifications.map((note) => (
-                              <tr key={note.id} onClick={() => setSelectedNotification(note)} style={{ cursor: "pointer" }}>
-                                <td>{note.subject || "Booking update"}</td>
-                                <td style={{ whiteSpace: "pre-line" }}>
-                                  {(note.message || "").slice(0, 120)}
-                                  {(note.message || "").length > 120 ? "..." : ""}
-
-                          {bookings
-                            .filter((b) => {
-                              if (bookingView === "new") {
-                                const status = (b.status || "").toLowerCase();
-                                return status === "pending" || status === "new";
-                              }
-                              return true;
-                            })
-                            .map((booking) => (
-                              <tr key={booking.id}>
-                                <td>{booking.service || "Service"}</td>
-                                <td>
-                                  {booking.name || booking.customerName || booking.customerEmail || booking.email || "Customer"}
-                                  <br />
-                                  <small className="text-muted">{booking.email || booking.customerEmail || ''}</small>
-                                </td>
-                                <td>{booking.city || "-"}</td>
-                                <td>{formatCurrency(booking.totalPrice || booking.priceToPay || 0)}</td>
-                                <td className="text-success fw-bold">{formatCurrency(booking.basePrice || (booking.totalPrice || booking.priceToPay || 0) * 0.9)}</td>
-                                <td className="text-warning">{formatCurrency(booking.commissionAmount || (booking.totalPrice || booking.priceToPay || 0) * 0.1)}</td>
-                                <td>
-                                  <Badge
-                                    bg={
-                                      (booking.status || "").toLowerCase() === "completed"
-                                        ? "success"
-                                        : (booking.status || "").toLowerCase() === "in progress"
-                                        ? "warning"
-                                        : "secondary"
-                                    }
-                                  >
-                                    {booking.status || "Pending"}
-                                  </Badge>
-                                </td>
-                                <td className="table-actions">
-                                  <Button
-                                    size="sm"
-                                    variant="success"
-                                    onClick={() => updateBookingStatus(booking.id, "Accepted")}
-                                  >
-                                    Accept
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="warning"
-                                    onClick={() => updateBookingStatus(booking.id, "In Progress")}
-                                  >
-                                    In Progress
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="primary"
-                                    onClick={() => updateBookingStatus(booking.id, "Completed")}
-                                  >
-                                    Complete
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="danger"
-                                    onClick={() => deleteBookingById(booking.id)}
-                                  >
-                                    Delete
-                                  </Button>
-
-                                </td>
-                                <td>{note.sentAt || "Just now"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </Table>
-                      </div>
-                    )}
                     {newBookings.length === 0 ? (
                       <div className="text-center py-5">
                         <i className="bi bi-inbox" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
@@ -1573,7 +1325,7 @@ export default function ServiceProviderDashboard() {
                           <th>Count</th>
                         </tr>
                       </thead>
-                      <tbody>
+                    <tbody>
                         <tr>
                           <td>Pending / New</td>
                           <td>{analyticsStats.pending}</td>
@@ -1588,67 +1340,6 @@ export default function ServiceProviderDashboard() {
                         </tr>
                       </tbody>
                     </Table>
-
-                <p className="text-muted">Customer bookings and system updates</p>
-              </div>
-              <Button variant="outline-primary" onClick={markNotificationsRead} disabled={providerUnreadCount === 0}>
-                Mark all as read
-              </Button>
-            </div>
-
-            <Row className="g-4">
-              <Col xs={12}>
-                <Card className="table-card wider-table">
-                  <Card.Body className="p-0">
-                    {providerNotifications.length === 0 ? (
-                      <div className="text-center py-5">
-                        <i className="bi bi-bell" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
-                        <p className="text-muted mt-3">No notifications yet.</p>
-                      </div>
-                    ) : (
-                      <Table responsive hover className="modern-table">
-                        <thead>
-                          <tr>
-                            <th>Subject</th>
-                            <th>Message</th>
-                            <th>Status</th>
-                            <th>Sent</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {providerNotifications.map((note) => {
-                            const status = (note.status || "").toLowerCase();
-                            return (
-                              <tr key={note.id} className={note.readAt ? "" : "table-active"}>
-                                <td>{note.subject || "Notification"}</td>
-                                <td>{note.message || note.details || "Update"}</td>
-                                <td>
-                                  <Badge
-                                    bg={
-                                      status === "new"
-                                        ? "primary"
-                                        : status === "pending"
-                                        ? "warning"
-                                        : status === "completed" || status === "approved"
-                                        ? "success"
-                                        : "secondary"
-                                    }
-                                  >
-                                    {note.status || "New"}
-                                  </Badge>
-                                </td>
-                                <td>
-                                  {note.sentAt?.toDate
-                                    ? note.sentAt.toDate().toLocaleString()
-                                    : note.sentAt || "Just now"}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </Table>
-                    )}
-
                   </Card.Body>
                 </Card>
               </Col>
@@ -1703,7 +1394,7 @@ export default function ServiceProviderDashboard() {
           className="custom-modal wider-modal"
         >
           <Modal.Header closeButton>
-            <Modal.Title>{editingProviderId ? "Edit Service Provider" : "Register Service Provider"}</Modal.Title>
+            <Modal.Title>Register Service Provider</Modal.Title>
           </Modal.Header>
           <Modal.Body>
             <Form className="row g-3">
@@ -1801,9 +1492,7 @@ export default function ServiceProviderDashboard() {
             <Button variant="outline-secondary" onClick={() => setShowProviderModal(false)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleSaveProvider}>
-              {editingProviderId ? "Save Changes" : "Create Provider"}
-            </Button>
+            <Button variant="primary" onClick={handleSaveProvider}>Create Provider</Button>
           </Modal.Footer>
         </Modal>
 

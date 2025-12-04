@@ -171,16 +171,10 @@ export default function GetStarted() {
             commissionRate: pricing.commissionRate,
           });
 
-
-          const orderDoc = await addDoc(collection(db, "Order"), {
-            email: formData.email,
-            customerName: formData.name,
-
           await addDoc(collection(db, "Order"), {
             name: formData.name,
             customerName: formData.name,
             email: formData.email,
-
             customerEmail: formData.email,
             phone: formData.phone || "",
             city: formData.city || "",
@@ -190,8 +184,6 @@ export default function GetStarted() {
             providerId: formData.providerId || prefillProviderId || "",
             providerName: formData.providerName || prefillProviderName || "",
             priceToPay: pricing.totalPrice,
-            totalPrice: pricing.totalPrice,
-            fullPrice: pricing.totalPrice,
             totalPrice: pricing.totalPrice,
             basePrice: pricing.basePrice,
             commissionAmount: pricing.commissionAmount,
@@ -207,17 +199,12 @@ export default function GetStarted() {
               providerEmail: formData.providerEmail.toLowerCase(),
               providerId: formData.providerId || "",
               subject: "New booking request",
-
-              message: `${formData.name} has requested ${formData.service}. Check your dashboard to accept or decline this booking.`,
-              status: "Sent",
-
-              message: `${formData.name} requested ${formData.service} in ${formData.city || 'your area'}.`,
+              message: `${formData.name} requested ${formData.service} in ${formData.city || "your area"}.`,
               customerName: formData.name,
               customerEmail: formData.email,
               service: formData.service,
               city: formData.city,
               status: "New",
-
               sentAt: serverTimestamp(),
             });
           }
@@ -238,11 +225,8 @@ export default function GetStarted() {
         console.warn("[GetStarted] Request email failed (ignored)", notifyErr);
       }
 
-
       // Only use addBooking as fallback if Firestore failed
       if (!savedToFirestore) {
-
-
         await addBooking({
           service: formData.service,
           providerEmail: formData.providerEmail || prefillProviderEmail,
@@ -252,25 +236,16 @@ export default function GetStarted() {
           customerEmail: formData.email,
           city: formData.city,
           basePrice: pricing.basePrice,
-
           totalPrice: pricing.totalPrice,
           commissionAmount: pricing.commissionAmount,
           commissionRate: pricing.commissionRate,
           status: "Booked",
           source: "GetStarted",
         });
-      }
 
-        totalPrice: pricing.totalPrice,
-        commissionAmount: pricing.commissionAmount,
-        commissionRate: pricing.commissionRate,
-        status: "Booked",
-        source: "GetStarted",
-      });
-
-
-      if (!savedToFirestore && !db) {
-        console.warn("[GetStarted] No Firestore available; booking stored locally only.");
+        if (!db) {
+          console.warn("[GetStarted] No Firestore available; booking stored locally only.");
+        }
       }
 
       setMessage("Your request has been sent to the provider. We'll follow up shortly.");

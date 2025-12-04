@@ -5,27 +5,6 @@ import { auth, db } from "../../firebase";
 import NavigationBar from "../../components/NavigationBar";
 import "./CustomerDashboard.css";
 
-const UPCOMING_BOOKINGS = [
-  {
-    service: "Garden Care",
-    date: "Jun 18 at 08:00",
-    provider: "Prana Gardening",
-    status: "Confirmed",
-  },
-  {
-    service: "Web Design Sprint",
-    date: "Jun 22 at 10:30",
-    provider: "Studio Kismet",
-    status: "Reviewing quote",
-  },
-  {
-    service: "Mobile Car Grooming",
-    date: "Jun 29 at 17:00",
-    provider: "Drive Shine",
-    status: "Supplier visiting",
-  },
-];
-
 const CUSTOMER_JOURNEY_STEPS = [
   {
     title: "Share your job",
@@ -42,7 +21,6 @@ const CUSTOMER_JOURNEY_STEPS = [
 ];
 
 export default function CustomerDashboard() {
-  const [userEmail, setUserEmail] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
@@ -57,7 +35,6 @@ export default function CustomerDashboard() {
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      setUserEmail(user?.email || "");
       setLoading(false);
     });
     return unsubscribe;
@@ -65,56 +42,127 @@ export default function CustomerDashboard() {
 
   useEffect(() => {
     if (!db) {
-      setBookings(UPCOMING_BOOKINGS);
+      setBookings([]);
       setBookingsLoading(false);
       return undefined;
     }
 
-    const buildQuery = () => {
-      if (currentUser?.uid) {
-        return query(collection(db, "Services"), where("userId", "==", currentUser.uid));
+    const email = currentUser?.email || "";
+    const emailLower = email ? email.toLowerCase() : "";
+
+    if (!currentUser?.uid && !email) {
+      setBookings([]);
+      setBookingsLoading(false);
+      return undefined;
+    }
+
+    const formatDate = (raw) => {
+      if (!raw) return "";
+      try {
+        const dateObj = typeof raw.toDate === "function" ? raw.toDate() : new Date(raw);
+        if (Number.isNaN(dateObj.getTime())) return "";
+        return dateObj.toLocaleString("en-NZ", {
+          month: "short",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+      } catch {
+        return "";
       }
-      if (currentUser?.email) {
-        return query(collection(db, "Services"), where("customerEmail", "==", currentUser.email));
-      }
-      if (currentUser?.email) {
-        return query(collection(db, "Services"), where("email", "==", currentUser.email));
-      }
-      return null;
     };
 
-    const q = buildQuery();
+    const mapBooking = (docSnap) => {
+      const data = docSnap.data() || {};
+      const dateValue =
+        data.date ||
+        data.bookedAt ||
+        data.bookingDate ||
+        data.scheduledAt ||
+        data.createdAt;
+      return {
+        id: docSnap.id,
+        service: data.service || data.name || data.title || "Service",
+        date: formatDate(dateValue),
+        rawDate: dateValue,
+        provider:
+          data.provider ||
+          data.providerName ||
+          data.provider_email ||
+          data.providerEmail ||
+          "Provider",
+        status: data.status || "Scheduled",
+      };
+    };
 
-    if (!q) {
-      setBookings(UPCOMING_BOOKINGS);
-      setBookingsLoading(false);
-      return undefined;
-    }
+    const collectionCandidates = ["Order", "Orders", "Bookings", "Services"];
+    const unsubscribeFns = [];
+    const aggregate = new Map();
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const mapped = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() || {};
-          return {
-            id: docSnap.id,
-            service: data.service || data.name || "Service",
-            date: data.date || data.bookedAt || "",
-            provider: data.provider || data.providerName || "Provider",
-            status: data.status || "Scheduled",
-          };
+    const matchesCurrentUser = (data) => {
+      const ids = [data.userId, data.customerId].filter(Boolean);
+      const emails = [
+        data.customerEmail,
+        data.email,
+        data.userEmail,
+        data.customer_email,
+        data.user_email,
+      ]
+        .filter(Boolean)
+        .map((v) => v.toString().toLowerCase());
+
+      return (
+        (currentUser?.uid && ids.includes(currentUser.uid)) ||
+        (emailLower && emails.includes(emailLower))
+      );
+    };
+
+    const recompute = () => {
+      const items = Array.from(aggregate.values())
+        .filter(Boolean)
+        .sort((a, b) => {
+          const aTime = Date.parse(a.rawDate || a.date || "") || 0;
+          const bTime = Date.parse(b.rawDate || b.date || "") || 0;
+          return bTime - aTime;
         });
-        setBookings(mapped);
-        setBookingsLoading(false);
-      },
-      (error) => {
-        console.warn("[CustomerDashboard] Failed to load services", error);
-        setBookings(UPCOMING_BOOKINGS);
-        setBookingsLoading(false);
-      }
-    );
+      setBookings(items);
+      setBookingsLoading(false);
+    };
 
-    return unsubscribe;
+    collectionCandidates.forEach((name) => {
+      try {
+        const ref = collection(db, name);
+        const unsub = onSnapshot(
+          ref,
+          (snapshot) => {
+            snapshot.docs.forEach((docSnap) => {
+              const data = docSnap.data() || {};
+              if (!matchesCurrentUser(data)) return;
+              const mapped = mapBooking(docSnap);
+              aggregate.set(`${name}:${docSnap.id}`, mapped);
+            });
+            recompute();
+          },
+          (error) => {
+            console.warn(`[CustomerDashboard] Failed to load bookings from ${name}`, error);
+          }
+        );
+        unsubscribeFns.push(unsub);
+      } catch (error) {
+        console.warn(`[CustomerDashboard] Failed to subscribe to ${name}`, error);
+      }
+    });
+
+    // If nothing ever fires, stop the loading state after a brief delay
+    const timeout = window.setTimeout(() => {
+      setBookingsLoading(false);
+    }, 1500);
+
+    return () => {
+      unsubscribeFns.forEach((fn) => fn && fn());
+      window.clearTimeout(timeout);
+    };
   }, [currentUser]);
 
   // Tickets count from Firestore
@@ -151,7 +199,7 @@ export default function CustomerDashboard() {
   }, [currentUser]);
 
   const statMetrics = useMemo(() => {
-    const totalBookings = bookings.length || UPCOMING_BOOKINGS.length;
+    const totalBookings = bookings.length;
     const activeRequests = bookings.filter((b) => {
       const status = (b.status || "").toString().toLowerCase();
       return status && !["completed", "resolved", "cancelled"].includes(status);
@@ -200,11 +248,7 @@ export default function CustomerDashboard() {
     }
   };
 
-  const displayedBookings = bookingsLoading
-    ? []
-    : bookings.length > 0
-    ? bookings
-    : UPCOMING_BOOKINGS;
+  const displayedBookings = bookingsLoading ? [] : bookings;
 
   if (loading) {
     return (
@@ -233,12 +277,6 @@ export default function CustomerDashboard() {
               <button type="button" className="nav-cta">
                 New request
               </button>
-
-              <button type="button" className="ghost" onClick={() => setShowTicketForm(true)}>
-                Create Support Ticket
-              </button>
-
-
             </div>
           </section>
 
@@ -262,18 +300,21 @@ export default function CustomerDashboard() {
             </div>
             <div className="customer-bookings-grid">
               {displayedBookings.map((booking) => (
-                <article key={`${booking.service}-${booking.provider}`} className="customer-booking-card">
+                <article key={`${booking.id || booking.service}-${booking.provider}`} className="customer-booking-card">
                   <div>
                     <p className="customer-booking-label">{booking.service}</p>
                     <h3>{booking.date || "Date to be scheduled"}</h3>
                     <p>{booking.provider}</p>
                   </div>
-                  <span className={`booking-status status-${booking.status.replace(/\s+/g, "-")}`}>
-                    {booking.status}
+                  <span className={`booking-status status-${(booking.status || "scheduled").replace(/\s+/g, "-")}`}>
+                    {booking.status || "Scheduled"}
                   </span>
                 </article>
               ))}
             </div>
+            {!bookingsLoading && displayedBookings.length === 0 && (
+              <p style={{ marginTop: "12px", color: "#5a6b93" }}>No bookings yet.</p>
+            )}
           </section>
 
           <section className="clean-steps">

@@ -322,6 +322,35 @@
   gap: 12px;
 }
 
+.support-card-faqs .faq-row-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.support-card-faqs .faq-row-icon {
+  font-weight: 700;
+  color: #1f3c87;
+  margin-left: 12px;
+}
+
+.support-card-faqs .faq-row.open {
+  border-color: rgba(53, 96, 255, 0.24);
+  box-shadow: 0 12px 28px rgba(15, 40, 87, 0.1);
+}
+
+.support-card-faqs .faq-a {
+  margin: 8px 0 0;
+}
+
 .faq-card-header {
   display: flex;
   align-items: flex-start;

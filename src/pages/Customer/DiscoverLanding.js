@@ -69,21 +69,6 @@ const SERVICE_TYPES = [
 const FALLBACK_SERVICE_IMAGE =
   "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=900&q=80";
 
-const featureCards = [
-  {
-    title: "City curators",
-    copy: "Local Allora hosts meet every professional and capture their latest work.",
-  },
-  {
-    title: "Calm tracking",
-    copy: "Status cards, nudges, and receipts live in one shared timeline that feels human.",
-  },
-  {
-    title: "Support that stays",
-    copy: "Concierge teams monitor each booking and jump in before issues become escalations.",
-  },
-];
-
 const journeySteps = [
   {
     title: "Share your job",

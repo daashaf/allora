@@ -149,15 +149,8 @@ export default function Login({ defaultMode = "login" }) {
         return;
       }
 
-
-      // Check if user came from services page and redirect back
-      const returnPath = getReturnPath();
-      if (returnPath && returnPath === "/services" && role === "Customer") {
-        navigate(returnPath, { replace: true });
-
       if (returnPath) {
         navigate(returnPath, { replace: true, state: returnState });
-
         return;
       }
 
