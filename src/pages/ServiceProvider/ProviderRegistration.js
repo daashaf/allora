@@ -1,3 +1,4 @@
+// Registration form that signs up service providers and seeds their profile records.
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";

@@ -1,3 +1,4 @@
+// Placeholder staff login UI that routes team members into admin-controlled areas.
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";

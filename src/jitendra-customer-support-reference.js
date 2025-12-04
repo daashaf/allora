@@ -1,3 +1,4 @@
+// Snapshot reference of the initial CRA scaffold from jitendra-customer-support branch.
 import React from "react";
 import logo from "./logo.svg";
 import "./App.css";

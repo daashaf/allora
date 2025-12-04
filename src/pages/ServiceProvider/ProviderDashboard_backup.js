@@ -1,4 +1,4 @@
-// src/components/ServiceProviderDashboard.js
+// Backup copy of the service provider dashboard for managing services and bookings.
 import React, { useEffect, useMemo, useState } from "react";
 import { Container, Row, Col, Card, Button, Modal, Form, Table, Badge, Alert, Nav } from "react-bootstrap";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";

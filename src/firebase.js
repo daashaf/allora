@@ -1,3 +1,4 @@
+// Firebase app initializer with env fallback, auth bootstrap, and Firestore helper utilities.
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { getFirestore, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";

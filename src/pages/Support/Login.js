@@ -1,4 +1,5 @@
-﻿import React, { useState } from "react";
+// Support portal login form for customer service agents.
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../firebase";

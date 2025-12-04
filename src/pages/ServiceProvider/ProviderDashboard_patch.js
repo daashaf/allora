@@ -1,3 +1,4 @@
+// Instruction snippet for patching ProviderDashboard to initialize tab state from URL.
 // Add this code after line 48 (after const [message, setMessage] = useState...)
 // Replace the activeView useState with this:
 

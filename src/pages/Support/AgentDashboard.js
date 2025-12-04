@@ -1,3 +1,4 @@
+// Support agent dashboard for reviewing tickets and marking updates in Firestore.
 import React, { useEffect, useState } from "react";
 import { collection, doc, getDocs, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";

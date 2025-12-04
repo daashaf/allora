@@ -8,12 +8,14 @@
 
 **BEFORE:**
 ```javascript
+// Original message state and default overview tab
 const [message, setMessage] = useState({ type: "", text: "" });
 const [activeView, setActiveView] = useState("overview");
 ```
 
 **AFTER:**
 ```javascript
+// Message state plus view initialized from tab query param
 const [message, setMessage] = useState({ type: "", text: "" });
 const searchParams = new URLSearchParams(window.location.search);
 const initialTab = searchParams.get("tab") || "overview";
@@ -28,6 +30,7 @@ const [activeView, setActiveView] = useState(initialTab);
 
 **ADD THIS NEW useEffect:**
 ```javascript
+// Listen for tab query param changes and sync activeView
 useEffect(() => {
   const params = new URLSearchParams(window.location.search);
   const tab = params.get("tab");
@@ -44,6 +47,7 @@ useEffect(() => {
 ### Complete State Section (ProviderDashboard.js)
 
 ```javascript
+// Full provider dashboard state setup, including tab from URL
 export default function ServiceProviderDashboard() {
   const [providers, setProviders] = useState([]);
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -105,6 +109,7 @@ export default function ServiceProviderDashboard() {
 
 ```javascript
 // URL parameter listener - ADD THIS FIRST
+// Keeps activeView aligned with ?tab value for deep-linking
 useEffect(() => {
   const params = new URLSearchParams(window.location.search);
   const tab = params.get("tab");
@@ -114,6 +119,7 @@ useEffect(() => {
 }, [window.location.search]);
 
 // Existing useEffect - KEEP THIS
+// Fetch providers/services and auth email on mount; clean up listeners on unmount
 useEffect(() => {
   fetchProviders();
   let unsubscribeServices;
@@ -148,6 +154,7 @@ useEffect(() => {
 
 **BEFORE:**
 ```javascript
+// Conditional notification wrapper hiding bell for provider view
 <div className="nav-support-actions">
   {/* Bell/notifications hidden for provider view */}
   {!isProviderView && (
@@ -161,6 +168,7 @@ useEffect(() => {
 
 **AFTER:**
 ```javascript
+// Always show notification wrapper alongside logout button
 <div className="nav-support-actions">
   <div className="nav-notification-wrapper">
     {/* notification bell code */}
@@ -174,6 +182,7 @@ useEffect(() => {
 
 **BEFORE:**
 ```javascript
+// Collapse nav and toggle notification list for non-admin/agent users
 const handleNotificationsClick = () => {
   setIsNavCollapsed(true);
   if (!isAdminView && !isAgentView) {
@@ -190,6 +199,7 @@ const handleNotificationsClick = () => {
 
 **AFTER:**
 ```javascript
+// Collapse nav, notify parent, and route to role-specific notification target
 const handleNotificationsClick = () => {
   setIsNavCollapsed(true);
   if (typeof onNotificationsViewed === "function") {
@@ -263,7 +273,7 @@ testNotification();
 ## Verification Checklist
 
 ```javascript
-// Check if notifications are being fetched
+// Quick console checks for notification data, URL params, and localStorage
 console.log("Notifications:", providerNotifications);
 console.log("Unread count:", providerUnreadCount);
 console.log("Current email:", currentEmail);
@@ -284,6 +294,7 @@ console.log("Hidden before:", localStorage.getItem("provider-notifications-hidde
 
 **Check:**
 ```javascript
+// Confirm provider dashboard route before expecting bell visibility
 // In browser console
 console.log("Is provider view:", location.pathname.startsWith("/provider"));
 console.log("Is on dashboard:", location.pathname.startsWith("/provider/dashboard"));
@@ -297,6 +308,7 @@ console.log("Is on dashboard:", location.pathname.startsWith("/provider/dashboar
 
 **Check:**
 ```javascript
+// Inspect notifications state, user email, and Firestore targeting fields
 // In browser console
 console.log("Provider notifications:", providerNotifications);
 console.log("Current email:", currentEmail);
@@ -315,6 +327,7 @@ console.log("Current email:", currentEmail);
 
 **Check:**
 ```javascript
+// Inspect unread count, timestamps, and ensure onSnapshot listener is active
 // In browser console
 console.log("Unread count:", providerUnreadCount);
 console.log("Last seen timestamp:", lastSeenProviderNotifications);

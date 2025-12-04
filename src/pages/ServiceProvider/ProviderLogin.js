@@ -1,3 +1,4 @@
+// Service provider login page that enforces provider role before entering the dashboard.
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";

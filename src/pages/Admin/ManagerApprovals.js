@@ -1,3 +1,4 @@
+// Admin workflow for reviewing and approving manager access requests from Firestore.
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./AdminDashboard.css";

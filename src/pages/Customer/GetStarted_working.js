@@ -1,3 +1,4 @@
+// Simplified booking request form prototype for capturing customer interest.
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";

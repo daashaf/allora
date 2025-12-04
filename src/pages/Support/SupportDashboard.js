@@ -1,3 +1,4 @@
+// Customer support dashboard that tracks tickets, conversations, and FAQ content via Firestore.
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";

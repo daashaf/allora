@@ -1,3 +1,4 @@
+// Customer dashboard that streams orders from Firestore and guides users through the booking journey.
 import React, { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, where, addDoc, serverTimestamp } from "firebase/firestore";

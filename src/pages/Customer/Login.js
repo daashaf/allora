@@ -1,3 +1,4 @@
+// Customer authentication screen covering login, signup, and inline password reset flows.
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from "firebase/auth";

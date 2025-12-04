@@ -1,3 +1,4 @@
+// Public About page featuring company story, metrics, and team highlights.
 import React from "react";
 import NavigationBar from "../../components/NavigationBar";
 import CountUpOnView from "../../components/CountUpOnView";

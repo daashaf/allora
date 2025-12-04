@@ -1,3 +1,4 @@
+// Admin view to manage user accounts, roles, and statuses via Firestore and API endpoints.
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./AdminDashboard.css";

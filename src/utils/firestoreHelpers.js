@@ -1,3 +1,4 @@
+// Helper to normalize Firestore timestamps into sortable display-friendly objects.
 export const formatSnapshotTimestamp = (value, fallback = "") => {
   if (!value) {
     return { display: fallback, order: 0 };

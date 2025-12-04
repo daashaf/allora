@@ -1,3 +1,4 @@
+// Animated counter that triggers once when the element enters the viewport.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 export default function CountUpOnView({

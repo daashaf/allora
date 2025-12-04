@@ -1,3 +1,4 @@
+// Customer-facing services listing that streams data from Firestore and routes to booking flows.
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, query } from "firebase/firestore";

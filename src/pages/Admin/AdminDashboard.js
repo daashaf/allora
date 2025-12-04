@@ -1,3 +1,4 @@
+// Admin dashboard for managing users, providers, services, bookings, and notifications via Firestore.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import {

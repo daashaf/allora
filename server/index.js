@@ -1,3 +1,4 @@
+// Express API for password reset flows backed by Firebase Admin and SMTP mailer.
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");

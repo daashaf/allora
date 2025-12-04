@@ -1,3 +1,4 @@
+// Service provider and service CRUD helpers with seed data, local caching, and Firestore sync.
 import { addDoc, collection, deleteDoc, doc, getDocs, limit, query, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db, ensureFirebaseAuth } from "./firebase";
 

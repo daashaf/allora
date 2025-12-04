@@ -1,3 +1,4 @@
+// Utilities for calculating commissions, storing bookings locally, and syncing records to Firestore.
 import { addDoc, collection, getDocs, limit, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { db, ensureFirebaseAuth } from "./firebase";
 

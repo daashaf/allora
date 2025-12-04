@@ -1,3 +1,4 @@
+// Central router wiring public, support, admin, and provider routes with role protection.
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Login from "../pages/Customer/Login";

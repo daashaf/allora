@@ -1,3 +1,4 @@
+// Support password reset flow using OTP email verification and Firebase auth updates.
 import React, { useState } from "react";
 import { getAuth, updatePassword, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "firebase/firestore";

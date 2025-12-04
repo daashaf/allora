@@ -1,3 +1,4 @@
+// Root React app component that gates initial loading and renders routed views.
 import React, { useEffect, useState } from "react";
 
 import { ReactComponent as InfinityLogo } from "./assets/infinity-logo.svg";

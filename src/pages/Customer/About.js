@@ -1,3 +1,4 @@
+// Customer About page outlining Allora's value propositions and team highlights.
 import React from "react";
 import NavigationBar from "../../components/NavigationBar";
 import "./About.css";

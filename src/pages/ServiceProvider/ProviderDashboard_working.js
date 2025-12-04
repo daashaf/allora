@@ -1,3 +1,4 @@
+// Lean working version of the provider dashboard focused on service listings and notifications.
 import React, { useEffect, useState } from "react";
 import { Container, Row, Col, Card, Button, Table, Badge, Nav } from "react-bootstrap";
 import { collection, onSnapshot, query, where, addDoc, serverTimestamp } from "firebase/firestore";

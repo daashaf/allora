@@ -1,3 +1,4 @@
+// Agent login flow that checks staff roles before routing to support dashboards.
 import React, { useEffect, useState } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";

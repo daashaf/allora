@@ -1,3 +1,4 @@
+// Reference notes for an optimized AdminDashboard that adds query limits to Firestore listeners.
 // OPTIMIZED VERSION - Replace the useEffect hooks with these versions
 // This adds query limits to prevent loading all data at once
 

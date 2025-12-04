@@ -1,3 +1,4 @@
+// Route guard components that gate pages by Firebase auth status and role membership.
 import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";

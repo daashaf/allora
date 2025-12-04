@@ -1,3 +1,4 @@
+// Simple admin password reset form that captures an email and shows confirmation messaging.
 import React, { useState } from "react";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import "../Customer/Login.css";

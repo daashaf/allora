@@ -1,3 +1,4 @@
+// Instruction checklist for adding Firestore limits inside AdminDashboard.js to reduce snapshot load.
 // STEP 1: Add limit to imports at top of AdminDashboard.js
 // Change this line:
 // import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";

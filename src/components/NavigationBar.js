@@ -1,3 +1,4 @@
+// Navigation header that manages auth-aware links, role visibility, and notifications dropdowns.
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";

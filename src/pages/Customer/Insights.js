@@ -1,3 +1,4 @@
+// Customer insights and FAQ page presenting curated questions and resources.
 import React, { useState } from "react";
 import NavigationBar from "../../components/NavigationBar";
 import "./CustomerDashboard.css";

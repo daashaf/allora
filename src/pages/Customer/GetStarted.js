@@ -1,3 +1,4 @@
+// Booking intake form for customers to request services and create Firestore orders.
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";

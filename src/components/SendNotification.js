@@ -1,3 +1,4 @@
+// Modal form that lets admins compose and send provider notifications to Firestore.
 import React, { useState } from "react";
 import { Modal, Form, Button } from "react-bootstrap";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";

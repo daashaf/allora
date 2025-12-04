@@ -1,4 +1,4 @@
-// src/components/ServiceProviderDashboard.js
+// Service provider dashboard for managing profile, services, bookings, and notifications.
 import React, { useEffect, useMemo, useState } from "react";
 import { Container, Row, Col, Card, Button, Modal, Form, Table, Badge, Alert, Nav } from "react-bootstrap";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
