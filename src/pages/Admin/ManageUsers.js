@@ -299,7 +299,13 @@ export default function ManageUsers() {
     const target = users.find((u) => u.id === id);
     if (!target) return;
 
-    const nextStatus = target.status === "Suspended" ? "Active" : "Suspended";
+    const normalizedStatus = (target.status || "").toString();
+    let nextStatus = "Suspended";
+    if (normalizedStatus === "Suspended") {
+      nextStatus = "Active";
+    } else if (normalizedStatus === "Pending") {
+      nextStatus = "Active";
+    }
 
     try {
       await updateDoc(doc(db, USER_COLLECTION, id), { status: nextStatus });

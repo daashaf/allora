@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import NavigationBar from "../../components/NavigationBar";
 import { calculateCommission, parsePrice } from "../../commission";
-import { db, ensureFirebaseAuth } from "../../firebase";
+import { auth, db, ensureFirebaseAuth, isBackgroundUserSession } from "../../firebase";
 import "./CustomerDashboard.css";
 
 export default function Services() {
@@ -73,21 +73,32 @@ export default function Services() {
     };
   }, []);
 
+  const requireCustomerLogin = (redirectPath = "/get-started", redirectState = null) => {
+    const user = auth?.currentUser;
+    if (!user || isBackgroundUserSession(user)) {
+      navigate("/login", { state: { from: { pathname: redirectPath, state: redirectState } } });
+      return false;
+    }
+    return true;
+  };
+
   const liveCount = useMemo(() => services.length, [services]);
 
   const handleHire = (service) => {
     const basePrice = parsePrice(service?.price || service?.rate || 0);
     const { totalPrice } = calculateCommission(basePrice);
-    navigate("/get-started", {
-      state: {
-        prefill: service?.service || service?.serviceName || service || "",
-        providerEmail: service?.email || service?.providerEmail || "",
-        providerName: service?.provider || service?.company || service?.providerName || "",
-        providerId: service?.providerId || service?.providerID || service?.id || "",
-        basePrice,
-        totalPrice,
-      },
-    });
+
+    const redirectState = {
+      prefill: service?.service || service?.serviceName || service || "",
+      providerEmail: service?.email || service?.providerEmail || "",
+      providerName: service?.provider || service?.company || service?.providerName || "",
+      providerId: service?.providerId || service?.providerID || service?.id || "",
+      basePrice,
+      totalPrice,
+    };
+
+    if (!requireCustomerLogin("/get-started", redirectState)) return;
+    navigate("/get-started", { state: redirectState });
   };
 
   return (
@@ -106,7 +117,14 @@ export default function Services() {
             </p>
           </div>
           <div className="services-actions">
-            <button type="button" className="nav-cta" onClick={() => navigate("/get-started")}>
+            <button
+              type="button"
+              className="nav-cta"
+              onClick={() => {
+                if (!requireCustomerLogin()) return;
+                navigate("/get-started");
+              }}
+            >
               Start a request
             </button>
           </div>

@@ -15,10 +15,8 @@ import {
 import { COMMISSION_RATE, formatCurrency, getBookings, summarizeBookings } from "../../commission";
 import NavigationBar from "../../components/NavigationBar";
 import { auth, db, ensureFirebaseAuth } from "../../firebase";
-
 import "../Customer/CustomerDashboard.css";
 import "./ProviderDashboard.css";
-
 export default function ServiceProviderDashboard() {
   const [providers, setProviders] = useState([]);
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -106,47 +104,27 @@ export default function ServiceProviderDashboard() {
     };
   }, []);
 
-  // Load provider profile and notifications
   useEffect(() => {
     if (!db || !currentEmail) return undefined;
     let mounted = true;
     const emailLower = currentEmail.toLowerCase();
-    
-    console.log(`[ProviderDashboard] Loading profile for email: ${emailLower}`);
-    
-    // Try multiple collections to find provider profile
-    const queries = [
-      query(collection(db, "ServiceProvider"), where("email", "==", emailLower)),
-      query(collection(db, "users"), where("email", "==", emailLower)),
-    ];
-    
-    const unsubscribers = [];
-    
-    queries.forEach((profileQuery, index) => {
-      const collectionName = index === 0 ? 'ServiceProvider' : 'users';
-      const unsub = onSnapshot(
-        profileQuery,
-        (snapshot) => {
-          if (!mounted) return;
-          const first = snapshot.docs[0];
-          if (first && !providerProfile) {
-            const data = first.data();
-            const profile = { 
-              id: first.id, 
-              ...data,
-              email: data.email || emailLower,
-              providerId: data.providerId || data.providerID || data.id || first.id
-            };
-            setProviderProfile(profile);
-            console.log(`[ProviderDashboard] Found provider profile in ${collectionName}:`, profile);
-          }
-        },
-        (error) => {
-          console.warn(`[ProviderDashboard] Failed to load provider profile from ${collectionName}`, error);
+    const profileQuery = query(
+      collection(db, "ServiceProvider"),
+      where("email", "==", emailLower)
+    );
+    const unsubProfile = onSnapshot(
+      profileQuery,
+      (snapshot) => {
+        if (!mounted) return;
+        const first = snapshot.docs[0];
+        if (first) {
+          setProviderProfile({ id: first.id, ...first.data() });
         }
-      );
-      unsubscribers.push(unsub);
-    });
+      },
+      (error) => {
+        console.warn("[ProviderDashboard] Failed to load provider profile", error);
+      }
+    );
 
     const notificationsQuery = query(
       collection(db, "Notification"),
@@ -168,35 +146,79 @@ export default function ServiceProviderDashboard() {
     );
     return () => {
       mounted = false;
-      unsubscribers.forEach(unsub => unsub && unsub());
+      if (unsubProfile) unsubProfile();
       if (unsubscribe) unsubscribe();
     };
   }, [currentEmail]);
 
-  // Load bookings
   useEffect(() => {
-    if (!db || !currentEmail) return undefined;
-    
-    const ownerEmail = currentEmail.toLowerCase();
-    console.log(`[ProviderDashboard] Loading bookings for: ${ownerEmail}`);
+    if (!db) return undefined;
+    const ownerEmail = (currentEmail || "").toLowerCase();
+    const ownerProviderId = (providerProfile?.providerId || "").toString();
+    if (!ownerEmail && !ownerProviderId) return undefined;
 
-    const bookingsQuery = query(
-      collection(db, "Order"),
-      where("providerEmail", "==", ownerEmail)
-    );
+    let mounted = true;
+    const aggregated = new Map();
 
-    const unsubscribe = onSnapshot(
-      bookingsQuery,
-      (snapshot) => {
-        const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        console.log(`[ProviderDashboard] Found ${docs.length} bookings`);
-        setBookings(docs);
-      },
-      (error) => console.error("[ProviderDashboard] Error loading bookings:", error)
-    );
+    const applySnapshot = (snapshot) => {
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        aggregated.set(docSnap.id, { id: docSnap.id, ...data });
+      });
+      if (mounted) {
+        const sorted = Array.from(aggregated.values()).sort((a, b) => {
+          const getMillis = (value) => {
+            if (value?.toMillis) return value.toMillis();
+            if (value?.seconds) return value.seconds * 1000;
+            const parsed = Date.parse(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+          };
+          return getMillis(b.createdAt) - getMillis(a.createdAt);
+        });
+        setBookings(sorted);
+      }
+    };
 
-    return unsubscribe;
-  }, [currentEmail, db]);
+    const unsubscribers = [];
+    if (ownerEmail) {
+      const bookingsByEmail = query(
+        collection(db, "Order"),
+        where("providerEmail", "==", ownerEmail)
+      );
+      unsubscribers.push(
+        onSnapshot(
+          bookingsByEmail,
+          (snapshot) => {
+            applySnapshot(snapshot);
+            console.log(`[ProviderDashboard] Loaded bookings by email for ${ownerEmail}`);
+          },
+          (error) => console.warn("[ProviderDashboard] Failed to load bookings by email", error)
+        )
+      );
+    }
+
+    if (ownerProviderId) {
+      const bookingsByProviderId = query(
+        collection(db, "Order"),
+        where("providerId", "==", ownerProviderId)
+      );
+      unsubscribers.push(
+        onSnapshot(
+          bookingsByProviderId,
+          (snapshot) => {
+            applySnapshot(snapshot);
+            console.log(`[ProviderDashboard] Loaded bookings by providerId ${ownerProviderId}`);
+          },
+          (error) => console.warn("[ProviderDashboard] Failed to load bookings by providerId", error)
+        )
+      );
+    }
+
+    return () => {
+      mounted = false;
+      unsubscribers.forEach((unsub) => unsub && unsub());
+    };
+  }, [currentEmail, providerProfile, db]);
 
   const filteredServices = useMemo(() => {
     const ownerEmail = (providerProfile?.email || currentEmail || "").toLowerCase();
@@ -610,10 +632,10 @@ export default function ServiceProviderDashboard() {
                     <div className="stat-icon">
                       <i className="bi bi-briefcase"></i>
                     </div>
-                    <h3 className="stat-number">{filteredServices.length}</h3>
-                    <p className="stat-label">Your Services</p>
+                    <h3 className="stat-number">{services.length}</h3>
+                    <p className="stat-label">Total Services</p>
                     <div className="stat-badge">
-                      <Badge bg="warning">{filteredServices.filter(s => s.available).length} Available</Badge>
+                      <Badge bg="warning">{availableServices} Available</Badge>
                     </div>
                   </Card.Body>
                 </Card>
@@ -622,12 +644,12 @@ export default function ServiceProviderDashboard() {
                 <Card className="stat-card stat-card-purple">
                   <Card.Body>
                     <div className="stat-icon">
-                      <i className="bi bi-calendar-check"></i>
+                      <i className="bi bi-clock-history"></i>
                     </div>
-                    <h3 className="stat-number">{bookings.length}</h3>
-                    <p className="stat-label">Total Bookings</p>
+                    <h3 className="stat-number">{pendingProviders}</h3>
+                    <p className="stat-label">Pending Approvals</p>
                     <div className="stat-badge">
-                      <Badge bg="info">{bookings.filter(b => b.status === 'Pending').length} Pending</Badge>
+                      <Badge bg="info">Review</Badge>
                     </div>
                   </Card.Body>
                 </Card>
@@ -635,39 +657,27 @@ export default function ServiceProviderDashboard() {
             </Row>
 
             <Row className="g-4 mb-4">
-              <Col lg={4} md={6}>
-                <Card className="stat-card stat-card-payout">
-                  <Card.Body>
-                    <div className="stat-icon">
-                      <i className="bi bi-piggy-bank"></i>
-                    </div>
-                    <p className="stat-label">Your Earnings</p>
-                    <h3 className="stat-number">{formatCurrency(bookingTotals.providerTotal)}</h3>
-                    <p className="text-muted mb-0">Total after commission</p>
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col lg={4} md={6}>
+              <Col lg={6} md={12}>
                 <Card className="stat-card stat-card-commission">
                   <Card.Body>
                     <div className="stat-icon">
                       <i className="bi bi-cash-coin"></i>
                     </div>
-                    <p className="stat-label">Platform Commission ({commissionRatePercent}%)</p>
+                    <p className="stat-label">Admin commission ({commissionRatePercent}%)</p>
                     <h3 className="stat-number">{formatCurrency(bookingTotals.adminTotal)}</h3>
-                    <p className="text-muted mb-0">Deducted from bookings</p>
+                    <p className="text-muted mb-0">Collected on recent bookings</p>
                   </Card.Body>
                 </Card>
               </Col>
-              <Col lg={4} md={6}>
-                <Card className="stat-card stat-card-blue">
+              <Col lg={6} md={12}>
+                <Card className="stat-card stat-card-payout">
                   <Card.Body>
                     <div className="stat-icon">
-                      <i className="bi bi-graph-up"></i>
+                      <i className="bi bi-piggy-bank"></i>
                     </div>
-                    <p className="stat-label">Total Revenue</p>
-                    <h3 className="stat-number">{formatCurrency(bookingTotals.totalVolume)}</h3>
-                    <p className="text-muted mb-0">Gross booking value</p>
+                    <p className="stat-label">Provider payout</p>
+                    <h3 className="stat-number">{formatCurrency(bookingTotals.providerTotal)}</h3>
+                    <p className="text-muted mb-0">Total after commission</p>
                   </Card.Body>
                 </Card>
               </Col>
@@ -765,7 +775,6 @@ export default function ServiceProviderDashboard() {
                 >
                   New
                 </Button>
-
               </div>
             </div>
 
@@ -776,7 +785,7 @@ export default function ServiceProviderDashboard() {
                     {bookings.length === 0 ? (
                       <div className="text-center py-5">
                         <i className="bi bi-inbox" style={{ fontSize: "3rem", opacity: 0.3 }}></i>
-                        <p className="text-muted mt-3">No bookings yet for {currentEmail}.</p>
+                        <p className="text-muted mt-3">No bookings yet.</p>
                       </div>
                     ) : (
                       <Table responsive hover className="modern-table">
@@ -785,9 +794,7 @@ export default function ServiceProviderDashboard() {
                             <th>Service</th>
                             <th>Customer</th>
                             <th>City</th>
-                            <th>Total Price</th>
-                            <th>Your Earnings</th>
-                            <th>Commission</th>
+                            <th>Price</th>
                             <th>Status</th>
                             <th>Actions</th>
                           </tr>
@@ -804,15 +811,9 @@ export default function ServiceProviderDashboard() {
                             .map((booking) => (
                               <tr key={booking.id}>
                                 <td>{booking.service || "Service"}</td>
-                                <td>
-                                  {booking.name || booking.customerName || booking.customerEmail || booking.email || "Customer"}
-                                  <br />
-                                  <small className="text-muted">{booking.email || booking.customerEmail || ''}</small>
-                                </td>
+                                <td>{booking.name || booking.customerName || booking.email || booking.customerEmail || "Customer"}</td>
                                 <td>{booking.city || "-"}</td>
-                                <td>{formatCurrency(booking.totalPrice || booking.priceToPay || 0)}</td>
-                                <td className="text-success fw-bold">{formatCurrency(booking.basePrice || (booking.totalPrice || booking.priceToPay || 0) * 0.9)}</td>
-                                <td className="text-warning">{formatCurrency(booking.commissionAmount || (booking.totalPrice || booking.priceToPay || 0) * 0.1)}</td>
+                                <td>{formatCurrency(booking.totalPrice || booking.priceToPay || booking.basePrice || 0)}</td>
                                 <td>
                                   <Badge
                                     bg={
@@ -1167,3 +1168,6 @@ export default function ServiceProviderDashboard() {
   </div>
   );
 }
+
+
+

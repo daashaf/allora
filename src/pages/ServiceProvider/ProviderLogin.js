@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import "../Customer/Login.css";
@@ -14,17 +14,20 @@ export default function ProviderLogin() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!auth || !db) return undefined;
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
-      const snap = await getDoc(doc(db, "users", user.uid));
-      const role = snap.exists() ? snap.data()?.role : null;
-      if (role === "Service Provider") {
-        navigate("/provider/dashboard", { replace: true });
+    if (!auth) return undefined;
+
+    let active = true;
+    // Always start the provider login page in a signed-out state so users must log in intentionally.
+    signOut(auth).catch(() => {
+      if (active) {
+        setError("Unable to reset your session. Please try again before signing in.");
       }
     });
-    return () => unsub();
-  }, [navigate]);
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -41,13 +44,20 @@ export default function ProviderLogin() {
       setSubmitting(true);
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const snap = await getDoc(doc(db, "users", cred.user.uid));
-      const role = snap.exists() ? snap.data()?.role : null;
-      if (role === "Service Provider") {
-        navigate("/provider/dashboard", { replace: true });
-      } else {
+      const data = snap.exists() ? snap.data() : {};
+      const role = data?.role || data?.Role || data?.userType || null;
+      const status = (data?.status || "").toString().toLowerCase();
+      if (role !== "Service Provider") {
         setError("This account is not authorized for provider access.");
         await signOut(auth);
+        return;
       }
+      if (status && status !== "active") {
+        setError("Your provider account is pending approval. Please wait for an admin to approve it.");
+        await signOut(auth);
+        return;
+      }
+      navigate("/provider/dashboard", { replace: true });
     } catch (signInError) {
       if (signInError?.code === "auth/invalid-credential") {
         setError("Invalid provider credentials.");
