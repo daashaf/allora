@@ -4,7 +4,6 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const nodemailer = require("nodemailer");
 const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
 
 dotenv.config();
 
@@ -13,8 +12,9 @@ const port = process.env.PORT || 4000;
 const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:3000";
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id,
+  // Use the default service account provided by the hosting runtime.
+  credential: admin.credential.applicationDefault(),
+  projectId: process.env.FIREBASE_PROJECT_ID,
 });
 const authAdmin = admin.auth();
 const firestore = admin.firestore();

@@ -10,15 +10,17 @@ const envConfig = {
   storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID,
 };
 
 const fallbackConfig = {
   apiKey: "AIzaSyA1gGqKyv1Lo_wH5SNsVqPB92SW1GgGPa8",
   authDomain: "allora-serice-hub.firebaseapp.com",
   projectId: "allora-serice-hub",
-  storageBucket: "allora-serice-hub.appspot.com",
+  storageBucket: "allora-serice-hub.firebasestorage.app",
   messagingSenderId: "47437060835",
   appId: "1:47437060835:web:768f0a66e5d142776c43d6",
+  measurementId: "G-CHY5DDD9BL",
 };
 
 const firebaseConfig = Object.fromEntries(
