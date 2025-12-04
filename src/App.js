@@ -1,78 +1,35 @@
-import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Insights from "./pages/Insights";
-import About from "./pages/About";
-import Services from "./pages/Services";
-import GetStarted from "./pages/GetStarted";
-import "./App.css";
-
-// Define application routes
+import React, { useEffect, useState } from "react";
+import { ReactComponent as InfinityLogo } from "./assets/infinity-logo.svg";
+import AppRoutes from "./routes/AppRoutes";
 
 export default function App() {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const finish = () => setIsLoading(false);
+    if (document.readyState === "complete") {
+      finish();
+    } else {
+      window.addEventListener("load", finish, { once: true });
+    }
+    const fallback = window.setTimeout(finish, 1000);
+    return () => {
+      window.removeEventListener("load", finish);
+      window.clearTimeout(fallback);
+    };
+  }, []);
+
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/insights" element={<Insights />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/services" element={<Services />} />
-        <Route path="/get-started" element={<GetStarted />} />
-      </Routes>
-    </BrowserRouter>
-  );
-}
-
-import logo from './logo.svg';
-import './App.css';
-
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
-}
-
-export default App;
-import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Insights from "./pages/Insights";
-import About from "./pages/About";
-import Services from "./pages/Services";
-import GetStarted from "./pages/GetStarted";
-import "./App.css";
-
-export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/insights" element={<Insights />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/services" element={<Services />} />
-        <Route path="/get-started" element={<GetStarted />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      {isLoading && (
+        <div className="app-loader" role="status" aria-live="polite">
+          <div className="app-loader-card">
+            <InfinityLogo className="app-loader-logo" focusable="false" />
+            <p className="app-loader-text">Loading Allora</p>
+          </div>
+        </div>
+      )}
+      <AppRoutes />
+    </>
   );
 }
