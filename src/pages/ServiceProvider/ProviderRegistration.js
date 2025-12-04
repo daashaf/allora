@@ -1,8 +1,11 @@
 ﻿import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import { addServiceProvider } from "../../serviceProviderCRUD";
 import "../Customer/Login.css";
+import { auth, db, isFirebaseConfigured } from "../../firebase";
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
 
@@ -35,11 +38,51 @@ export default function ProviderRegistration() {
 
     try {
       setSubmitting(true);
-      await addServiceProvider({
-        ...formData,
-        status: "Pending",
-        providerId: `SP-${Date.now()}`,
-      });
+
+      const providerId = `SP-${Date.now()}`;
+      const normalizedEmail = formData.email.trim().toLowerCase();
+
+      if (isFirebaseConfigured && auth && db) {
+        // Create auth user for the provider.
+        const credential = await createUserWithEmailAndPassword(
+          auth,
+          normalizedEmail,
+          formData.password
+        );
+
+        // Store provider profile.
+        const providerPayload = {
+          providerId,
+          businessName: formData.businessName,
+          ownerName: formData.ownerName,
+          email: normalizedEmail,
+          phone: formData.phone || "",
+          address: formData.address || "",
+          category: formData.category || "Home Services",
+          status: "Pending",
+          createdAt: serverTimestamp(),
+          userId: credential.user.uid,
+        };
+
+        await Promise.all([
+          setDoc(doc(db, "users", credential.user.uid), {
+            email: normalizedEmail,
+            role: "Service Provider",
+            status: "Pending",
+            joinedAt: serverTimestamp(),
+          }),
+          addDoc(collection(db, "ServiceProvider"), providerPayload),
+        ]);
+      } else {
+        // Fallback to local storage if Firebase is unavailable.
+        await addServiceProvider({
+          ...formData,
+          email: normalizedEmail,
+          status: "Pending",
+          providerId,
+        });
+      }
+
       // Fire off a confirmation email; non-blocking for local demo storage.
       fetch(`${API_BASE}/provider/register-notify`, {
         method: "POST",
@@ -52,7 +95,10 @@ export default function ProviderRegistration() {
       }).catch(() => {
         // Ignore email failures in the UI; logged server-side.
       });
-      setMessage("Thanks! Your provider registration was submitted and is pending review.");
+
+      setMessage(
+        "Thanks! Your provider registration was submitted and is pending admin review. You'll be able to log in once approved."
+      );
       setFormData({
         businessName: "",
         ownerName: "",
@@ -64,7 +110,13 @@ export default function ProviderRegistration() {
       });
     } catch (error) {
       console.error("Failed to register provider", error);
-      setMessage("Unable to submit registration. Please try again.");
+      if (error?.code === "auth/email-already-in-use") {
+        setMessage("An account already exists for this email. Try logging in instead.");
+      } else if (error?.code === "auth/weak-password") {
+        setMessage("Password must be at least 6 characters.");
+      } else {
+        setMessage("Unable to submit registration. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }

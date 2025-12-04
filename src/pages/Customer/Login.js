@@ -68,6 +68,12 @@ export default function Login({ defaultMode = "login" }) {
     return null;
   };
 
+  const getReturnState = () => {
+    const fromState = location.state?.from;
+    if (typeof fromState === "object" && fromState.state) return fromState.state;
+    return null;
+  };
+
   const redirectToSupportIfRequested = (role) => {
     const targetPath = getReturnPath();
     if (targetPath && targetPath.startsWith("/support") && canAccessSupport(role)) {
@@ -136,7 +142,15 @@ export default function Login({ defaultMode = "login" }) {
       await ensureUserRole(credential.user.uid, credential.user.email);
       const role = await getUserRole(credential.user.uid);
 
+      const returnPath = getReturnPath();
+      const returnState = getReturnState();
+
       if (redirectToSupportIfRequested(role)) {
+        return;
+      }
+
+      if (returnPath) {
+        navigate(returnPath, { replace: true, state: returnState });
         return;
       }
 
@@ -405,6 +419,12 @@ export default function Login({ defaultMode = "login" }) {
 
       setSignupMessage(`Account created successfully! We've emailed ${signupData.email}. Redirecting...`);
       setTimeout(() => {
+        const returnPath = getReturnPath();
+        const returnState = getReturnState();
+        if (returnPath) {
+          navigate(returnPath, { replace: true, state: returnState });
+          return;
+        }
         if (!redirectToSupportIfRequested("Customer")) {
           routeToRoleHome("Customer");
         }

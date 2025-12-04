@@ -10,7 +10,7 @@ import {
     getDoc,
     serverTimestamp,
 } from "firebase/firestore";
-import { app } from "../../firebase";
+import { app, isBackgroundUserSession } from "../../firebase";
 import NavigationBar from "../../components/NavigationBar";
 import "./SupportDashboard.css";
 
@@ -68,6 +68,15 @@ function SupportDashboard() {
         status: "Open",
     });
     const [showCreateTicket, setShowCreateTicket] = useState(false);
+
+    const requireCustomerLogin = () => {
+        const user = auth?.currentUser;
+        if (!user || isBackgroundUserSession(user)) {
+            navigate("/login", { state: { from: "/support" } });
+            return false;
+        }
+        return true;
+    };
 
     //  FETCH LOGGED-IN USER INFO 
     useEffect(() => {
@@ -180,6 +189,7 @@ function SupportDashboard() {
     //  CREATE NEW TICKET (AUTO USER INFO + SERVER TIME) 
     const handleCreateTicket = async (e) => {
         e.preventDefault();
+        if (!requireCustomerLogin()) return;
         if (!newTicket.subject.trim() || !newTicket.description.trim()) {
             alert("Please fill in both subject and description.");
             return;
@@ -256,6 +266,7 @@ function SupportDashboard() {
                         className="bi bi-journal-text header-icon"
                         title="My Tickets"
                         onClick={() => {
+                            if (!requireCustomerLogin()) return;
                             setShowTickets((prev) => !prev);
                             setShowNotifications(false);
                             setShowLogout(false);
@@ -387,7 +398,10 @@ function SupportDashboard() {
                     <div>
                         <button
                             className="add-btn"
-                            onClick={() => setShowCreateTicket(!showCreateTicket)}
+                            onClick={() => {
+                                if (!requireCustomerLogin()) return;
+                                setShowCreateTicket(!showCreateTicket);
+                            }}
                         >
                             + Create
                         </button>
