@@ -103,11 +103,14 @@ export const getBookings = async () => {
       await ensureFirebaseAuth();
       const resolved = await resolveBookingCollection();
       if (resolved?.ref) {
+        const MAX_BOOKINGS = 200;
         let snap;
         try {
-          snap = await getDocs(query(resolved.ref, orderBy("createdAt", "desc")));
+          snap = await getDocs(
+            query(resolved.ref, orderBy("createdAt", "desc"), limit(MAX_BOOKINGS))
+          );
         } catch (orderErr) {
-          snap = await getDocs(resolved.ref);
+          snap = await getDocs(query(resolved.ref, limit(MAX_BOOKINGS)));
           // eslint-disable-next-line no-console
           console.warn("[Bookings] Could not order by createdAt, returning unordered results", orderErr);
         }

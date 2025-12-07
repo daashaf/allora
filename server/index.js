@@ -30,7 +30,7 @@ app.use(express.json());
 // Simple in-memory store for demo purposes.
 const pendingResets = new Map();
 
-const transporter = nodemailer.createTransport({
+const smtpConfig = {
   host: process.env.MAIL_HOST,
   port: Number(process.env.MAIL_PORT || 587),
   secure: process.env.MAIL_SECURE === "true",
@@ -38,18 +38,30 @@ const transporter = nodemailer.createTransport({
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASS,
   },
-});
+};
 
-transporter.verify((error) => {
-  if (error) {
-    console.warn(
-      "[mail] Transport verification failed. Check your SMTP settings before going live.",
-      error.message
-    );
-  } else {
-    console.log("[mail] Ready to send messages.");
-  }
-});
+// Fallback to a local JSON transport when SMTP is not configured to avoid connection errors in dev.
+const useJsonTransport = !smtpConfig.host || !smtpConfig.auth.user || !smtpConfig.auth.pass;
+const transporter = useJsonTransport
+  ? nodemailer.createTransport({ jsonTransport: true })
+  : nodemailer.createTransport(smtpConfig);
+
+if (useJsonTransport) {
+  console.warn(
+    "[mail] MAIL_HOST / MAIL_USER / MAIL_PASS missing. Emails will be logged locally (json transport)."
+  );
+} else {
+  transporter.verify((error) => {
+    if (error) {
+      console.warn(
+        "[mail] Transport verification failed. Check your SMTP settings before going live.",
+        error.message
+      );
+    } else {
+      console.log("[mail] Ready to send messages.");
+    }
+  });
+}
 
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -342,6 +354,51 @@ Allora Support`,
   } catch (error) {
     console.warn("[provider-register] Failed to send registration email:", error.message);
     return res.status(500).json({ message: "Could not send email right now." });
+  }
+});
+
+// Admin helper: clear all provider registration documents (and related notifications) in Firestore.
+app.post("/provider/registrations/clear", async (_req, res) => {
+  const batchSize = 400; // stay under Firestore's 500-mutation batch limit
+
+  const deleteInChunks = async (collectionRef, description) => {
+    let deleted = 0;
+    while (true) {
+      const snap = await collectionRef.limit(batchSize).get();
+      if (snap.empty) break;
+      const batch = firestore.batch();
+      snap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+      await batch.commit();
+      deleted += snap.size;
+      if (snap.size < batchSize) break;
+    }
+    console.log(`[provider-clear] Removed ${deleted} ${description}.`);
+    return deleted;
+  };
+
+  try {
+    const removedProviders = await deleteInChunks(
+      firestore.collection("ServiceProvider"),
+      "provider registrations"
+    );
+    const removedNotifications = await deleteInChunks(
+      firestore.collection("Notification").where("type", "==", "provider-registration"),
+      "provider registration notifications"
+    );
+
+    return res.json({
+      message:
+        removedProviders || removedNotifications
+          ? "Provider registrations cleared."
+          : "No provider registrations to clear.",
+      removedProviders,
+      removedNotifications,
+    });
+  } catch (error) {
+    console.error("[provider-clear] Failed to clear provider registrations:", error);
+    return res
+      .status(500)
+      .json({ message: "Unable to clear provider registrations right now." });
   }
 });
 

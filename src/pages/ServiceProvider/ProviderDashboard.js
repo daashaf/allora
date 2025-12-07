@@ -59,19 +59,25 @@ export default function ServiceProviderDashboard() {
 
   const [providerUnreadCount, setProviderUnreadCount] = useState(0);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const NEW_STATUSES = ["", "pending", "new", "request", "requested"];
+  const ACTIVE_STATUSES = ["accepted", "in progress", "in-progress", "progress", "completed", "complete"];
+
   const newBookings = useMemo(
     () =>
       bookings.filter((b) => {
         const status = (b.status || "").toLowerCase();
-        return status === "" || status === "pending" || status === "new";
+        return NEW_STATUSES.includes(status);
       }),
     [bookings]
   );
+
   const managedBookings = useMemo(
     () =>
       bookings.filter((b) => {
         const status = (b.status || "").toLowerCase();
-        return status && status !== "pending" && status !== "new";
+        if (NEW_STATUSES.includes(status)) return false;
+        if (!status) return false;
+        return ACTIVE_STATUSES.includes(status) || status === "cancelled" || status === "canceled";
       }),
     [bookings]
   );
@@ -635,7 +641,8 @@ export default function ServiceProviderDashboard() {
     if (normalized === "in progress") return "warning";
     if (normalized === "accepted") return "primary";
     if (normalized === "cancelled" || normalized === "canceled") return "danger";
-    return "secondary";
+    if (normalized === "pending" || normalized === "new" || normalized === "") return "secondary";
+    return "info";
   };
 
   const markNotificationsRead = async () => {

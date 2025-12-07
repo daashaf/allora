@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { ReactComponent as InfinityLogo } from "../../assets/infinity-logo.svg";
 import { addServiceProvider } from "../../serviceProviderCRUD";
 import "../Customer/Login.css";
@@ -41,13 +41,6 @@ export default function ProviderRegistration() {
       setSubmitting(true);
 
       const { password, ...safeFormData } = formData;
-      await addServiceProvider({
-        ...safeFormData,
-        status: "Pending",
-        providerId: `SP-${Date.now()}`,
-      });
-
-
       const providerId = `SP-${Date.now()}`;
       const normalizedEmail = formData.email.trim().toLowerCase();
 
@@ -59,33 +52,26 @@ export default function ProviderRegistration() {
           formData.password
         );
 
-        // Store provider profile.
-        const providerPayload = {
-          providerId,
-          businessName: formData.businessName,
-          ownerName: formData.ownerName,
-          email: normalizedEmail,
-          phone: formData.phone || "",
-          address: formData.address || "",
-          category: formData.category || "Home Services",
-          status: "Pending",
-          createdAt: serverTimestamp(),
-          userId: credential.user.uid,
-        };
-
-        await Promise.all([
-          setDoc(doc(db, "users", credential.user.uid), {
-            email: normalizedEmail,
-            role: "Service Provider",
-            status: "Pending",
-            joinedAt: serverTimestamp(),
-          }),
-          addDoc(collection(db, "ServiceProvider"), providerPayload),
-        ]);
-      } else {
-        // Fallback to local storage if Firebase is unavailable.
+        // Create provider record (includes admin notification)
         await addServiceProvider({
-          ...formData,
+          ...safeFormData,
+          email: normalizedEmail,
+          status: "Pending",
+          providerId,
+          userId: credential.user.uid,
+        });
+
+        // Store provider user profile in /users
+        await setDoc(doc(db, "users", credential.user.uid), {
+          email: normalizedEmail,
+          role: "Service Provider",
+          status: "Pending",
+          joinedAt: serverTimestamp(),
+        });
+      } else {
+        // Non-Firebase demo path
+        await addServiceProvider({
+          ...safeFormData,
           email: normalizedEmail,
           status: "Pending",
           providerId,

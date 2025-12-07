@@ -105,7 +105,8 @@ export const getServiceProviders = async () => {
     try {
       await ensureFirebaseAuth();
       const { ref } = await resolveProviderCollection();
-      const snap = await getDocs(ref);
+      const MAX_PROVIDERS = 200;
+      const snap = await getDocs(query(ref, limit(MAX_PROVIDERS)));
       return mapFirestoreDocs(snap);
     } catch (error) {
       console.warn("[ServiceProviderCRUD] Falling back to local storage for providers", error);
@@ -123,9 +124,12 @@ export const addServiceProvider = async (provider) => {
     await ensureFirebaseAuth();
     const { ref, name } = await resolveProviderCollection();
     const safeProvider = scrubProviderSecrets(provider);
+    const submittedAt = serverTimestamp();
     const payload = {
       ...safeProvider,
       providerId: safeProvider.providerId || `SP-${Date.now()}`,
+      status: safeProvider.status || "Pending",
+      submittedAt,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -135,12 +139,15 @@ export const addServiceProvider = async (provider) => {
     if (payload.status === "Pending") {
       try {
         await addDoc(collection(db, "Notification"), {
-          audience: "Admin",
+          audience: "Administrators",
           channel: "In-App",
           subject: "New Provider Registration",
           message: `${payload.businessName || payload.ownerName || "A new provider"} has registered and is pending approval.`,
           status: "Sent",
-          sentAt: serverTimestamp(),
+          sentAt: submittedAt,
+          providerEmail: (payload.email || "").toLowerCase(),
+          providerId: payload.providerId || payload.provider_id || "",
+          type: "provider-registration",
         });
       } catch (notifyError) {
         console.warn("[ServiceProviderCRUD] Failed to send admin notification", notifyError);
@@ -191,6 +198,12 @@ export const deleteServiceProvider = async (id) => {
 
   const list = readStore(PROVIDER_KEY, seedProviders).filter((item) => item.id !== id);
   writeStore(PROVIDER_KEY, list);
+  return true;
+};
+
+// Clear locally stored provider registrations (used when Firebase is not configured).
+export const clearLocalServiceProviders = () => {
+  writeStore(PROVIDER_KEY, []);
   return true;
 };
 

@@ -6,6 +6,8 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
+  writeBatch,
   limit,
   onSnapshot,
   orderBy,
@@ -18,7 +20,11 @@ import { auth, db, ensureFirebaseAuth } from "../../firebase";
 import { useNavigate, useLocation } from "react-router-dom";
 import NavigationBar from "../../components/NavigationBar";
 import { COMMISSION_RATE, formatCurrency, getBookings, summarizeBookings } from "../../commission";
-import { getServiceProviders, updateServiceProvider } from "../../serviceProviderCRUD";
+import {
+  getServiceProviders,
+  updateServiceProvider,
+  clearLocalServiceProviders,
+} from "../../serviceProviderCRUD";
 import SendNotification from "../../components/SendNotification";
 import "./AdminDashboard.css";
 
@@ -208,20 +214,53 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [listings, setListings] = useState([]);
   const [serviceView, setServiceView] = useState("Manage Services");
   const [providerRegistrations, setProviderRegistrations] = useState([]);
+  const [hiddenProviderIds, setHiddenProviderIds] = useState(() => new Set());
   const [activePanel, setActivePanel] = useState("notifications");
   const [loadNonCritical, setLoadNonCritical] = useState(false);
+
+  // Section/panel awareness to avoid spinning up every listener when not needed.
+  const isDashboard = activeSection === "Dashboard";
+  const isServiceManagement = activeSection === "Service Management";
+  const isUserManagement = activeSection === "User Management";
+  const isIssueResolution = activeSection === "Issue Resolution";
+  const isNotificationCenter = activeSection === "Notification Center";
+  const isSystemManagement = activeSection === "System Management";
+
+  const shouldLoadProviders =
+    loadNonCritical &&
+    (isServiceManagement ||
+      (isDashboard && activePanel === "providers") ||
+      (isUserManagement && userMgmtTab === "Service Provider"));
+  const shouldLoadServices =
+    loadNonCritical &&
+    (isServiceManagement || (isDashboard && activePanel === "providers"));
+  const shouldLoadCategories = loadNonCritical && isServiceManagement;
+  const shouldLoadTickets =
+    loadNonCritical && (isIssueResolution || (isDashboard && activePanel === "tickets"));
+  const shouldLoadNotifications =
+    loadNonCritical && (isNotificationCenter || (isDashboard && activePanel === "notifications"));
+  const shouldLoadRoles = loadNonCritical && isNotificationCenter;
+  const shouldLoadSettings = loadNonCritical && isSystemManagement;
+  const shouldLoadBookings = loadNonCritical && isDashboard;
+
   const handleDashboardPanelChange = (panelKey) => {
     setActiveSection("Dashboard");
     setActivePanel(panelKey);
     navigate(`/admin/dashboard?target=${panelKey}`);
   };
+  const visibleProviderRegistrations = useMemo(
+    () =>
+      providerRegistrations.filter((p) => !hiddenProviderIds.has(p.id)),
+    [providerRegistrations, hiddenProviderIds]
+  );
+
   const pendingProviders = useMemo(() => {
     if (!loadNonCritical) return [];
-    return providerRegistrations.filter((p) => {
+    return visibleProviderRegistrations.filter((p) => {
       const normalized = getBadgeLabel(p.status || "Pending");
       return normalized.toLowerCase() === "pending";
     });
-  }, [providerRegistrations, loadNonCritical]);
+  }, [visibleProviderRegistrations, loadNonCritical]);
   const syncedLegacyProvidersRef = useRef(false);
 
   useEffect(() => {
@@ -230,7 +269,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   }, []);
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
+    if (!db || !shouldLoadServices) return undefined;
     return onSnapshot(query(collection(db, SERVICE_COLLECTION), limit(100)), (snapshot) => {
       const docs = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
@@ -243,7 +282,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
       setServices(docs);
       setListings(docs);
     });
-  }, [loadNonCritical]);
+  }, [shouldLoadServices, db]);
 
   // Service Provider registrations (Firestore-first, fallback to local store)
   const refreshProviderRegistrations = async () => {
@@ -252,8 +291,13 @@ const getBadgeClass = (value, fallback = "unknown") => {
   };
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
-    const unsub = onSnapshot(query(collection(db, "ServiceProvider"), limit(100)), (snapshot) => {
+    if (!db || !shouldLoadProviders) return undefined;
+    const providerQuery = query(
+      collection(db, "ServiceProvider"),
+      orderBy("submittedAt", "desc"),
+      limit(100)
+    );
+    const unsub = onSnapshot(providerQuery, (snapshot) => {
       const docs = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
         const { display: submittedAtDisplay, order: submittedOrder } = formatSnapshotTimestamp(
@@ -272,17 +316,38 @@ const getBadgeClass = (value, fallback = "unknown") => {
           status: data.status || "Pending",
           userId: data.userId || data.uid || "",
           submittedAt: submittedAtDisplay,
-          _order: submittedOrder || 0,
+          _order:
+            submittedOrder ||
+            (typeof data.submittedAt?.toMillis === "function" ? data.submittedAt.toMillis() : 0) ||
+            (typeof data.createdAt?.toMillis === "function" ? data.createdAt.toMillis() : 0) ||
+            Date.parse(data.createdAt || data.submittedAt || "") ||
+            Date.now(),
         };
       });
       setProviderRegistrations(docs.sort((a, b) => (b._order || 0) - (a._order || 0)));
     });
     return () => unsub();
-  }, [loadNonCritical]);
+  }, [shouldLoadProviders, db]);
+
+  const clearProviderRegistrations = async () => {
+    const confirmClear = window.confirm(
+      "Clear all provider registration requests from your view? Data will remain in the database."
+    );
+    if (!confirmClear) return;
+
+    // Hide all current registrations for this session only.
+    setHiddenProviderIds((prev) => {
+      const next = new Set(prev);
+      providerRegistrations.forEach((p) => next.add(p.id));
+      return next;
+    });
+    setProviderRegistrations([]);
+    alert("Provider registrations cleared from the dashboard view only.");
+  };
 
   // One-time backfill of legacy/local provider registrations into Firestore so old requests appear.
   useEffect(() => {
-    if (!loadNonCritical) return;
+    if (!shouldLoadProviders) return;
     const syncLegacyProviders = async () => {
       if (!db || syncedLegacyProvidersRef.current) return;
       try {
@@ -329,7 +394,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
       }
     };
     syncLegacyProviders();
-  }, [db, providerRegistrations, loadNonCritical]);
+  }, [db, providerRegistrations, shouldLoadProviders]);
 
   // Deep link into dashboard panels (e.g., from nav bell)
   useEffect(() => {
@@ -499,9 +564,17 @@ const getBadgeClass = (value, fallback = "unknown") => {
     }
 
     const tempPassword =
-      (provider.password && provider.password.length >= 6 ? provider.password : `Temp-${Math.random().toString(36).slice(2, 8)}!`);
+      provider.password && provider.password.length >= 6
+        ? provider.password
+        : `Temp-${Math.random().toString(36).slice(2, 8)}!`;
 
-    let approvalData = {};
+    const approveLocally = async (note) => {
+      await updateProviderStatus(id, "Active");
+      logProviderNotification("Approved", provider);
+      if (note) window.alert(note);
+    };
+
+    // Try backend approval (creates auth user + email) but fall back to local Firestore update if offline.
     try {
       const response = await fetch(`${API_BASE}/provider/approve`, {
         method: "POST",
@@ -516,30 +589,24 @@ const getBadgeClass = (value, fallback = "unknown") => {
           address: provider.address,
         }),
       });
-      approvalData = await response.json().catch(() => ({}));
+      const approvalData = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(approvalData?.message || "Approval API failed");
       }
-    } catch (error) {
-      console.error("[ProviderApproval] Backend failed to approve provider", error);
-      window.alert(
-        error?.message
-          ? `Could not approve provider: ${error.message}`
-          : "Could not approve provider right now. Please try again when the approval service is available."
+
+      const emailSent = approvalData?.emailSent !== false;
+      await approveLocally(
+        emailSent
+          ? `Provider approved. Email sent to ${provider.email}.`
+          : `Provider approved; email service unavailable. Share credentials manually (temp password: ${tempPassword}).`
       );
-      return;
+    } catch (error) {
+      console.warn("[ProviderApproval] Backend unavailable, approving locally", error);
+      await approveLocally(
+        `Provider approved locally. Backend email service is unreachable, so please share credentials manually (temp password: ${tempPassword}).`
+      );
     }
-
-    const emailSent = approvalData?.emailSent !== false;
-
-    await updateProviderStatus(id, "Active");
-    window.alert(
-      emailSent
-        ? `Provider approved. Email sent to ${provider.email}.`
-        : `Provider approved, but the email could not be sent automatically. Share this temporary password with the provider so they can sign in: ${tempPassword}`
-    );
-    logProviderNotification("Approved", provider);
   };
 
   const declineProviderRegistration = (id) => {
@@ -619,7 +686,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
+    if (!db || !shouldLoadCategories) return undefined;
     return onSnapshot(query(collection(db, "Category"), limit(100)), (snapshot) => {
       setCategories(
         snapshot.docs.map((docSnap) => {
@@ -633,7 +700,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         })
       );
     });
-  }, [db, loadNonCritical]);
+  }, [db, shouldLoadCategories]);
 
   const addCategory = async () => {
     if (!db) return;
@@ -685,7 +752,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const syncedCategoriesRef = useRef(new Set());
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
+    if (!db || !shouldLoadCategories) return undefined;
     return onSnapshot(query(collection(db, SERVICE_CATEGORY_COLLECTION), limit(100)), (snapshot) => {
       setCategoryServices(
         snapshot.docs.map((docSnap) => {
@@ -703,10 +770,10 @@ const getBadgeClass = (value, fallback = "unknown") => {
         })
       );
     });
-  }, [db, loadNonCritical]);
+  }, [db, shouldLoadCategories]);
 
   useEffect(() => {
-    if (!loadNonCritical) return;
+    if (!shouldLoadBookings) return;
     let mounted = true;
     getBookings()
       .then((list) => {
@@ -718,10 +785,10 @@ const getBadgeClass = (value, fallback = "unknown") => {
     return () => {
       mounted = false;
     };
-  }, [loadNonCritical]);
+  }, [shouldLoadBookings]);
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
+    if (!db || !isServiceManagement || !shouldLoadCategories || !shouldLoadServices) return undefined;
     const syncMissingServices = async () => {
       if (!(await ensureAuth())) return;
       for (const category of categoryServices) {
@@ -773,7 +840,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
     };
 
     syncMissingServices();
-  }, [categoryServices, services, loadNonCritical]);
+  }, [categoryServices, services, shouldLoadCategories, shouldLoadServices, isServiceManagement]);
 
   const addCategoryService = async () => {
     if (!db) return;
@@ -858,7 +925,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [issues, setIssues] = useState([]);
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
+    if (!db || !shouldLoadTickets) return undefined;
     const ticketsQuery = query(collection(db, "tickets"), orderBy("createdAt", "desc"), limit(50));
     return onSnapshot(ticketsQuery, (snapshot) => {
       const docs = snapshot.docs
@@ -882,7 +949,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         .map(({ _order, ...rest }) => rest);
       setIssues(docs);
     });
-  }, [loadNonCritical]);
+  }, [shouldLoadTickets, db]);
 
   const filteredIssues = useMemo(
     () => loadNonCritical ? issues.filter((i) => (issueFilter === "All" ? true : i.status === issueFilter)) : [],
@@ -915,7 +982,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [roles, setRoles] = useState([]);
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
+    if (!db || !shouldLoadRoles) return undefined;
     return onSnapshot(query(collection(db, "Roles"), limit(50)), (snapshot) => {
       setRoles(
         snapshot.docs.map((docSnap) => {
@@ -929,7 +996,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         })
       );
     });
-  }, [db, loadNonCritical]);
+  }, [db, shouldLoadRoles]);
 
   const addRole = async () => {
     if (!db) return;
@@ -1066,7 +1133,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   }, [notifications, loadNonCritical]);
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
+    if (!db || !shouldLoadNotifications) return undefined;
     return onSnapshot(query(collection(db, "Notification"), limit(50)), (snapshot) => {
       const docs = snapshot.docs
         .map((docSnap) => {
@@ -1086,7 +1153,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
         .sort((a, b) => b.sentOrder - a.sentOrder);
       setNotifications(docs);
     });
-  }, [db, loadNonCritical]);
+  }, [db, shouldLoadNotifications]);
 
   const sendNotification = async () => {
     const subject = compose.subject.trim();
@@ -1150,14 +1217,14 @@ const getBadgeClass = (value, fallback = "unknown") => {
   const [settings, setSettings] = useState(defaultSettings);
 
   useEffect(() => {
-    if (!db || !loadNonCritical) return undefined;
+    if (!db || !shouldLoadSettings) return undefined;
     const settingsRef = doc(db, "Admin", "siteSettings");
     return onSnapshot(settingsRef, (snapshot) => {
       if (snapshot.exists()) {
         setSettings({ ...defaultSettings, ...snapshot.data() });
       }
     });
-  }, [loadNonCritical]);
+  }, [shouldLoadSettings, db]);
 
   const unreadNotificationCount = useMemo(() => {
     if (!loadNonCritical) return 0;
@@ -1195,7 +1262,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
   };
 
   return (
-    <div className="support-page admin-dashboard-page">
+    <div className="admin-dashboard-page">
       <NavigationBar
         activeSection="admin"
         notificationCount={unreadNotificationCount}
@@ -1326,6 +1393,15 @@ const getBadgeClass = (value, fallback = "unknown") => {
                 {activePanel === "providers" && (
                   <div className="admin-panel-card provider-card" id="admin-provider-panel">
                     <h4>Provider Registrations</h4>
+                    <div className="actions-bar" style={{ marginBottom: 8, gap: 8 }}>
+                      <button
+                        className="action-btn"
+                        onClick={clearProviderRegistrations}
+                        disabled={!pendingProviders.length}
+                      >
+                        Clear All
+                      </button>
+                    </div>
                     {pendingProviders.length === 0 ? (
                       <p style={{ margin: 0 }}>No registrations awaiting approval.</p>
                     ) : (
@@ -1378,6 +1454,7 @@ const getBadgeClass = (value, fallback = "unknown") => {
                                         setSelectedProviderEmail(p.email);
                                         setShowNotificationModal(true);
                                       }}
+                                      disabled={!p.email}
                                     >
                                       Message
                                     </button>

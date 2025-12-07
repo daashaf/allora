@@ -24,7 +24,18 @@ export default function SendNotification({ show, onHide, providerEmail }) {
     e.preventDefault();
 
     // Basic input validation
+    const normalizedEmail = (providerEmail || "").trim().toLowerCase();
     if (!formData.subject || !formData.message) return;
+    if (!normalizedEmail) {
+      alert("This provider does not have an email address on file.");
+      onHide();
+      return;
+    }
+    if (!db) {
+      alert("Firebase is not configured. Cannot send notifications right now.");
+      onHide();
+      return;
+    }
 
     setSending(true);
 
@@ -32,7 +43,7 @@ export default function SendNotification({ show, onHide, providerEmail }) {
       // Create a new document inside the "Notification" collection
       await addDoc(collection(db, "Notification"), {
         audience: "Service Providers",               // Who this message is for
-        providerEmail: providerEmail.toLowerCase(), // Target provider
+        providerEmail: normalizedEmail,             // Target provider
         subject: formData.subject,                  // Message subject
         message: formData.message,                  // Message body
         status: "New",                              // Default unread status
@@ -48,6 +59,7 @@ export default function SendNotification({ show, onHide, providerEmail }) {
 
     } catch (error) {
       console.error("Error sending notification:", error);
+      alert("Unable to send notification right now. Please try again.");
     } finally {
       setSending(false);
     }
@@ -100,7 +112,11 @@ export default function SendNotification({ show, onHide, providerEmail }) {
         <Button variant="secondary" onClick={onHide}>
           Cancel
         </Button>
-        <Button variant="primary" onClick={handleSubmit} disabled={sending}>
+        <Button
+          variant="primary"
+          onClick={handleSubmit}
+          disabled={sending || !providerEmail}
+        >
           {sending ? "Sending..." : "Send Message"}
         </Button>
       </Modal.Footer>

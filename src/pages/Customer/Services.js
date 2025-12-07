@@ -1,10 +1,10 @@
 // Customer-facing services listing that streams data from Firestore and routes to booking flows.
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, limit, onSnapshot, query } from "firebase/firestore";
 import NavigationBar from "../../components/NavigationBar";
 import { calculateCommission, parsePrice } from "../../commission";
-
+import { getServices as getLocalServices } from "../../serviceProviderCRUD";
 import { auth, db, ensureFirebaseAuth, isBackgroundUserSession } from "../../firebase";
 
 import "./CustomerDashboard.css";
@@ -14,6 +14,30 @@ export default function Services() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const MAX_SERVICES = 200;
+
+  const normalizeService = (service = {}) => ({
+    ...service,
+    service: service.service || service.serviceName || service.name || "",
+    provider: service.provider || service.company || service.providerName || service.ownerName || "",
+    providerEmail:
+      service.providerEmail || service.provider_email || service.email || service.contactEmail || "",
+    price: service.price || service.rate,
+    status: service.status || "Active",
+  });
+
+  const loadFallbackServices = async (message) => {
+    try {
+      const local = await getLocalServices();
+      const normalized = Array.isArray(local) ? local.map(normalizeService) : [];
+      setServices(normalized);
+    } catch (fallbackError) {
+      console.warn("[Services] Failed to load local fallback services", fallbackError);
+    } finally {
+      if (message) setError(message);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let unsubscribe;
@@ -27,14 +51,11 @@ export default function Services() {
       }
 
       if (!db) {
-        if (mounted) {
-          setError("Services are unavailable right now. Please try again soon.");
-          setLoading(false);
-        }
+        if (mounted) loadFallbackServices("Services are unavailable right now. Please try again soon.");
         return;
       }
 
-      const servicesQuery = query(collection(db, "Services"));
+      const servicesQuery = query(collection(db, "Services"), limit(MAX_SERVICES));
 
       unsubscribe = onSnapshot(
         servicesQuery,
@@ -44,7 +65,7 @@ export default function Services() {
           const blockedStatuses = ["suspended", "rejected"];
 
           const docs = snapshot.docs
-            .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+            .map((docSnap) => normalizeService({ id: docSnap.id, ...docSnap.data() }))
             .filter((service) => {
               const status = (service.status || "").toLowerCase();
               if (blockedStatuses.includes(status)) return false;
@@ -55,14 +76,18 @@ export default function Services() {
             })
             .sort((a, b) => (a.service || "").localeCompare(b.service || "", undefined, { sensitivity: "base" }));
 
+          if (docs.length === 0) {
+            loadFallbackServices(null);
+            return;
+          }
+
           setServices(docs);
           setLoading(false);
         },
         (snapshotError) => {
           console.warn("[Services] Failed to load services", snapshotError);
           if (mounted) {
-            setError("We couldn't load services right now. Please refresh and try again.");
-            setLoading(false);
+            loadFallbackServices("We couldn't load services right now. Showing sample listings.");
           }
         }
       );
@@ -160,9 +185,14 @@ export default function Services() {
                   </article>
                 ))
               : services.map((service) => {
-                  const status = (service.status || "Active").toLowerCase();
+                  const statusRaw = service.status || "Active";
+                  const status = statusRaw.toLowerCase();
                   const statusClass =
-                    status === "pending" ? "pending" : status === "approved" || status === "active" ? "good" : "neutral";
+                    status === "pending"
+                      ? "pending"
+                      : status === "approved" || status === "active"
+                      ? "good"
+                      : "neutral";
                   const basePrice = parsePrice(service.price || service.rate || 0);
                   const { totalPrice } = calculateCommission(basePrice);
                   const priceLabel = basePrice
@@ -179,9 +209,12 @@ export default function Services() {
                             {service.provider || service.company || "Verified provider"}
                           </p>
                         </div>
-                        <span className={`service-status ${statusClass}`}>
-                          {service.status || "Active"}
-                        </span>
+                        <div className="service-top-right">
+                          <span className={`service-status ${statusClass}`}>
+                            {statusRaw || "Active"}
+                          </span>
+                          <span className="service-price-tag">{priceLabel}</span>
+                        </div>
                       </div>
 
                       <p className="service-description">
@@ -196,7 +229,6 @@ export default function Services() {
                         ) : null}
                         {service.experience ? <span>{service.experience} experience</span> : null}
                         <span className="provider-email">{service.providerEmail || service.provider_email || service.email || "Contact via platform"}</span>
-                        <span>{priceLabel}</span>
                       </div>
 
                       <div className="service-actions">

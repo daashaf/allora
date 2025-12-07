@@ -13,7 +13,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f8fbff;
+  background-color: #f5f8ff; /* flat tone to eliminate gradient banding */
 }
 
 /* Ensure a single scroll container: keep scrolling on #root for consistency */

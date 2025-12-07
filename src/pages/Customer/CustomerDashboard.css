@@ -2042,9 +2042,10 @@
     background: #ffffff;
     border: 1px solid rgba(12, 30, 76, 0.08);
     border-radius: 18px;
-    padding: clamp(16px, 4vw, 28px);
+    padding: clamp(16px, 4vw, 32px);
     display: grid;
     gap: 18px;
+    box-shadow: 0 22px 60px rgba(12, 30, 76, 0.14);
   }
 
   .services-list-heading {
@@ -2072,18 +2073,34 @@
 
   .services-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 20px;
   }
 
   .service-card {
-    border: 1px solid rgba(12, 30, 76, 0.08);
-    border-radius: 14px;
-    background: #fff;
-    padding: 14px;
+    position: relative;
+    border: 1px solid rgba(12, 30, 76, 0.1);
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7f9ff 100%);
+    padding: 18px 18px 20px;
     display: grid;
-    gap: 10px;
-    box-shadow: 0 12px 30px rgba(12, 30, 76, 0.08);
+    gap: 12px;
+    box-shadow: 0 26px 56px rgba(12, 30, 76, 0.14);
+    overflow: hidden;
+  }
+
+  .service-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    padding: 1.5px;
+    background: linear-gradient(135deg, #2f6bff, #0ea5e9);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    pointer-events: none; /* keep card actions clickable */
   }
 
   .service-card-top {
@@ -2096,34 +2113,44 @@
   .service-card h3 {
     margin: 0;
     color: #0a1230;
-    font-size: 1.1rem;
+    font-size: 1.25rem;
+    letter-spacing: -0.01em;
   }
 
   .service-pill {
     display: inline-flex;
-    padding: 4px 10px;
+    padding: 6px 12px;
     border-radius: 999px;
     background: #eef1f6;
     color: #4b5d82;
     font-weight: 700;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     letter-spacing: 0.04em;
   }
 
   .service-provider {
     margin: 4px 0 0;
     color: #4b5d82;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 0.98rem;
+  }
+
+  .service-top-right {
+    display: grid;
+    gap: 8px;
+    justify-items: end;
+    align-content: flex-start;
   }
 
   .service-status {
-    padding: 6px 10px;
-    border-radius: 10px;
-    font-weight: 700;
-    font-size: 0.9rem;
+    padding: 8px 14px;
+    border-radius: 14px;
+    font-weight: 800;
+    font-size: 1rem;
     background: #eef1f6;
     color: #2f3c63;
-    border: 1px solid rgba(12, 30, 76, 0.08);
+    border: 1px solid rgba(12, 30, 76, 0.14);
+    text-transform: capitalize;
   }
 
   .service-status.good {
@@ -2138,10 +2165,21 @@
     border-color: rgba(246, 195, 67, 0.2);
   }
 
+  .service-price-tag {
+    padding: 8px 14px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #2f6bff, #0ea5e9);
+    color: #fff;
+    font-weight: 800;
+    font-size: 1rem;
+    box-shadow: 0 8px 20px rgba(15, 107, 255, 0.25);
+  }
+
   .service-description {
     margin: 0;
-    color: #2f3c63;
-    line-height: 1.55;
+    color: #1c2745;
+    line-height: 1.65;
+    font-size: 1rem;
   }
 
   .service-meta {
@@ -2149,15 +2187,21 @@
     gap: 8px;
     flex-wrap: wrap;
     color: #4b5d82;
-    font-weight: 600;
-    font-size: 0.92rem;
+    font-weight: 700;
+    font-size: 1rem;
   }
 
   .service-meta span {
-    padding: 6px 10px;
-    border-radius: 10px;
+    padding: 10px 14px;
+    border-radius: 14px;
     background: #f6f8fd;
-    border: 1px solid rgba(12, 30, 76, 0.06);
+    border: 1px solid rgba(12, 30, 76, 0.08);
+  }
+
+  .provider-email {
+    font-weight: 800;
+    color: #0e2c63;
+    letter-spacing: 0.01em;
   }
 
   .service-actions {

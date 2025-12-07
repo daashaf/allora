@@ -13,9 +13,19 @@
 .admin-dashboard-page {
   background: #f8fbff;
   min-height: 100vh;
-  /* Override support-page overflow: hidden so the admin view can scroll */
+  font-family: "Poppins", sans-serif;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+  /* Keep a single page-level scroll and hide any stray horizontal overflow */
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: visible;
+}
+
+.admin-dashboard-page::before,
+.admin-dashboard-page::after {
+  content: none;
 }
 
 .admin-dashboard-shell {
@@ -23,11 +33,15 @@
   max-width: none;
   margin: 0 auto 40px;
   padding: 0 18px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .admin-main-content {
   padding: 24px 0 54px;
-  overflow: hidden;
+  flex: 1;
+  overflow: visible;
 }
 
 .admin-hero {
@@ -1280,14 +1294,4 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-/* Fix double scrollbar issue: keep a single vertical scroll on the page */
-.admin-dashboard-page {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.admin-dashboard-shell,
-.admin-main-content {
-  overflow: unset;
 }
